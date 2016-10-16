@@ -1,6 +1,5 @@
 // used tutorials on http://webglfundamentals.org to make these
 
-
 function createShader(gl, type, source) {
     const shader = gl.createShader(type);
     gl.shaderSource(shader, source);
@@ -23,6 +22,97 @@ function createProgram(gl, vertexShader, fragmentShader) {
     
     console.log(gl.getProgramInfoLog(program));
     gl.deleteProgram(program);
+}
+
+const vShaderSrc = `
+        attribute vec4 a_position;
+
+        uniform mat4 u_matrix;
+
+        attribute vec4 a_color;
+        varying vec4 v_color;
+        
+        void main() {
+            gl_Position = u_matrix * a_position;
+            v_color = a_color;
+        }
+    `;
+
+const fShaderSrc = `
+    precision mediump float;
+
+    varying vec4 v_color;
+
+    void main() {
+        gl_FragColor = v_color;
+    }
+    `;
+
+class GL {
+    constructor(canvasElement) {
+        const gl = canvas.getContext('webgl');
+
+        if (!gl) {
+            alert('WebGL not working!');
+            return;
+        }
+
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+        // Create program
+        const vShader = createShader(gl, gl.VERTEX_SHADER, vShaderSrc);
+        const fShader = createShader(gl, gl.FRAGMENT_SHADER, fShaderSrc);
+        const program = createProgram(gl, vShader, fShader);
+        gl.useProgram(program);
+
+        gl.enable(gl.DEPTH_TEST);
+
+        this.posLoc = gl.getAttribLocation(program, "a_position");
+        this.colorLoc = gl.getAttribLocation(program, 'a_color');
+        this.matrixLoc = gl.getUniformLocation(program, 'u_matrix');
+
+        this.vertexCount = 0;
+
+        this.gl = gl;
+    }
+
+    draw() {
+        const gl = this.gl;
+
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount);
+    }
+
+    setColors(colors) {
+        const gl = this.gl;
+
+        const color_buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, color_buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(this.colorLoc);
+        gl.vertexAttribPointer(this.colorLoc, 3, gl.UNSIGNED_BYTE, true, 0, 0);
+    }
+
+    setVertices(vertices) {
+        const gl = this.gl;
+
+        const buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+        // Connect the buffered data to the attribute a_position in our vShader
+        gl.enableVertexAttribArray(this.posLoc);
+
+        // args to vertexAttribPointer: attribute location, number of components per iteration, 
+        // data type, whether data should be normalized, stride, offset
+        gl.vertexAttribPointer(this.posLoc, 3, gl.FLOAT, false, 0, 0);
+
+        this.vertexCount = vertices.length / 3;
+    }
+
+    setPerspective(matrix) {
+        this.gl.uniformMatrix4fv(this.matrixLoc, false, matrix);
+    }
 }
 
 class Matrix {

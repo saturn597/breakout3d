@@ -1,4 +1,6 @@
-const colors = new Uint8Array([
+var Data = Data || {};
+
+Data.colors = new Uint8Array([
         // left column front
         200,  70, 120,
         200,  70, 120,
@@ -128,7 +130,7 @@ const colors = new Uint8Array([
         160, 160, 220
 ]);
 
-const vertices = new Float32Array([
+Data.vertices = new Float32Array([
         // left column front
         0,   0,  0,
         0, 150,  0,
