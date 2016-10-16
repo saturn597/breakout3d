@@ -253,3 +253,81 @@ class PositionMatrix extends Matrix {
         return Matrix.multiply(this, this.projectionMatrix).m;
     }
 }
+
+class Box {
+    constructor(x, y, z, w, h, d) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+
+        this.d = d;
+        this.w = w;
+        this.h = h;
+
+        this.colors = {
+            front: [0, 0, 0],
+            back: [0, 0, 0],
+            t: [0, 0, 0],
+            bottom: [0, 0, 0],
+            left: [0, 0, 0],
+            right: [0, 0, 0],
+        };
+    }
+
+    getColors() {
+        let colors = this.colors;
+
+        function add(arr) {
+            return arr.concat(arr, arr, arr, arr, arr);
+        }
+
+        return [].concat(
+            add(colors.front),
+            add(colors.back),
+            add(colors.left),
+            add(colors.right),
+            add(colors.t),
+            add(colors.bottom)
+        );
+    }
+
+    getVertices() {
+        const t = this.y - this.h / 2;
+        const bottom = this.y + this.h / 2;
+        const left = this.x - this.w / 2;
+        const right = this.x + this.w / 2;
+        const front = this.z - this.d / 2;
+        const back = this.z + this.d / 2;
+
+        const c1 = [left, t, front];
+        const c2 = [left, bottom, front];
+        const c3 = [right, t, front];
+        const c4 = [right, bottom, front];
+        const c5 = [left, t, back];
+        const c6 = [left, bottom, back];
+        const c7 = [right, t, back];
+        const c8 = [right, bottom, back];
+
+        let arr = [
+            c1, c3, c2,  // front
+            c3, c2, c4,
+
+            c5, c7, c6,  // back
+            c7, c6, c8,
+
+            c5, c2, c1,  // left
+            c5, c6, c2,
+
+            c7, c4, c3,  // right
+            c7, c8, c4,
+
+            c5, c3, c1,  // top
+            c5, c7, c3,
+
+            c6, c4, c2,  // bottom
+            c6, c8, c4,
+        ];
+
+        return [].concat(...arr);
+    }
+}

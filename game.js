@@ -2,14 +2,22 @@ function main() {
     const canvas = document.getElementById('canvas');
     const gl = new GL(canvas);
 
-    gl.setVertices(Data.vertices);
-    gl.setColors(Data.colors);
-    
+    const box = new Box(0, 0, 300, 100, 100, 100);
+    box.colors.front = [122, 0, 0];
+    box.colors.back = [122, 0, 0];
+    box.colors.left = [0, 255, 0];
+    box.colors.right = [0, 255, 0];
+    box.colors.t = [0, 0, 100];
+    box.colors.bottom = [0, 0, 100];
+
+    gl.setVertices(new Float32Array(box.getVertices()));
+    gl.setColors(new Int8Array(box.getColors()));
+
     const aspect = canvas.clientWidth / canvas.clientHeight; 
 
     let matrix = new PositionMatrix([1, 0, 0, 0,
                   0, -1, 0, 0,
-                  0, 0, 1, 0,
+                  0, 0, -1, 0,
                   0, 0, 0, 1]);
     matrix.setPerspective(Math.PI / 4, aspect, 1, 2000);
 
@@ -21,11 +29,9 @@ function main() {
         }
         let progress = t - last;
         last = t;
-        angle = 2 * Math.PI * progress / 1000;
-        matrix.rotateY(angle);
-        matrix.translate(0, 0, -360);
+        angle = 2 * Math.PI * progress / 2000;
+        matrix.rotateX(angle);
         gl.setPerspective(matrix.getProjection());
-        matrix.translate(0, 0, 360);
         gl.draw();
         requestAnimationFrame(d);
     });
