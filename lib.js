@@ -136,7 +136,7 @@ class Matrix {
         for (let y = 0; y < m1.h; y++) {
             for (let x = 0; x < m2.w; x++) {
                 let e = 0;
-                for (let i = 0; i < m1.h; i++) {
+                for (let i = 0; i < m1.w; i++) {
                     e += m1.get(i, y) * m2.get(x, i);
                 }
                 newM.push(e);
@@ -169,17 +169,17 @@ class Matrix {
 }
 
 class PositionMatrix extends Matrix {
-    constructor(initial) {
-        super(4, 4, initial);
+    constructor(w, h, initial) {
+        super(w, h, initial);
         this.projectionMatrix = PositionMatrix.getIdentity();
     }
 
     static getIdentity() {
         return new Matrix(4, 4, [
-                1, 0, 0, 0,
-                0, 1, 0, 0,
-                0, 0, 1, 0,
-                0, 0, 0, 1
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
         ]);
     }
 
@@ -196,7 +196,7 @@ class PositionMatrix extends Matrix {
     }
 
     translate(tx, ty, tz) {
-        this.multiply_update(new PositionMatrix([
+        this.multiply_update(new PositionMatrix(4, 4, [
             1, 0, 0, 0,
             0, 1, 0, 0, 
             0, 0, 1, 0,
@@ -205,7 +205,7 @@ class PositionMatrix extends Matrix {
     }
  
     scale(sx, sy, sz) {
-        this.multiply_update(new PositionMatrix([
+        this.multiply_update(new PositionMatrix(4, 4, [
             sx, 0, 0, 0,
             0, sy, 0, 0,
             0, 0, sz, 0,
@@ -217,7 +217,7 @@ class PositionMatrix extends Matrix {
         const c = Math.cos(angle);
         const s = Math.sin(angle);
 
-        this.multiply_update(new PositionMatrix([
+        this.multiply_update(new PositionMatrix(4, 4, [
             1, 0, 0, 0,
             0, c, s, 0,
             0, -s, c, 0,
@@ -229,7 +229,7 @@ class PositionMatrix extends Matrix {
         const c = Math.cos(angle);
         const s = Math.sin(angle);
 
-        this.multiply_update(new PositionMatrix([
+        this.multiply_update(new PositionMatrix(4, 4, [
             c, 0, -s, 0,
             0, 1, 0, 0,
             s, 0, c, 0,
@@ -241,7 +241,7 @@ class PositionMatrix extends Matrix {
         const c = Math.cos(angle);
         const s = Math.sin(angle);
 
-        this.multiply_update(new PositionMatrix([
+        this.multiply_update(new PositionMatrix(4, 4, [
             c, s, 0, 0,
             -s, c, 0, 0,
             0, 0, 1, 0,
@@ -272,26 +272,11 @@ class Box {
             left: [0, 0, 0],
             right: [0, 0, 0],
         };
+
+        this.vertices = this.calcVertices();
     }
 
-    getColors() {
-        let colors = this.colors;
-
-        function add(arr) {
-            return arr.concat(arr, arr, arr, arr, arr);
-        }
-
-        return [].concat(
-            add(colors.front),
-            add(colors.back),
-            add(colors.left),
-            add(colors.right),
-            add(colors.t),
-            add(colors.bottom)
-        );
-    }
-
-    getVertices() {
+    calcVertices() {
         const t = this.y - this.h / 2;
         const bottom = this.y + this.h / 2;
         const left = this.x - this.w / 2;
@@ -307,27 +292,62 @@ class Box {
         const c6 = [left, bottom, back];
         const c7 = [right, t, back];
         const c8 = [right, bottom, back];
+        
+        return [c1, c2, c3, c4, c5, c6, c7, c8];
+    }
+
+    getColors() {
+        let colors = this.colors;
+
+        function add(arr) {
+            return [...arr, ...arr, ...arr, ...arr, ...arr, ...arr];
+        }
+
+        return [
+            ...add(colors.front),
+            ...add(colors.back),
+            ...add(colors.left),
+            ...add(colors.right),
+            ...add(colors.t),
+            ...add(colors.bottom)
+        ];
+    }
+
+    getPolys() {
+        let v = this.vertices;
 
         let arr = [
-            c1, c3, c2,  // front
-            c3, c2, c4,
+            v[0], v[2], v[1],  // front
+            v[2], v[1], v[3],
 
-            c5, c7, c6,  // back
-            c7, c6, c8,
+            v[4], v[6], v[5],  // back
+            v[6], v[5], v[7],
 
-            c5, c2, c1,  // left
-            c5, c6, c2,
+            v[4], v[1], v[0],  // left
+            v[4], v[5], v[1],
 
-            c7, c4, c3,  // right
-            c7, c8, c4,
+            v[6], v[3], v[2],  // right
+            v[6], v[7], v[3],
 
-            c5, c3, c1,  // top
-            c5, c7, c3,
+            v[4], v[2], v[0],  // top
+            v[4], v[6], v[2],
 
-            c6, c4, c2,  // bottom
-            c6, c8, c4,
+            v[5], v[3], v[1],  // bottom
+            v[5], v[7], v[3],
         ];
 
         return [].concat(...arr);
+    }
+
+    getVertices() {
+        return this.vertices;
+    }
+
+    transform(x) {
+        this.vertices = this.vertices.map(v => {
+            let m = new PositionMatrix(4, 1, [v[0], v[1], v[2], 0]);
+            m.rotateX(x);
+            return [m.m[0], m.m[1], m.m[2]];
+        })
     }
 }
