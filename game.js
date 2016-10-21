@@ -2,31 +2,34 @@ function main() {
     const canvas = document.getElementById('canvas');
     const gl = new GL(canvas);
 
-    const box = new Box(0, 0, 0, 100, 100, 100);
-    box.colors.front = [122, 0, 0];
+    const box = new GLBox(100, 100, 100);
+    box.colors.front = [100, 0, 0];
     box.colors.back = [122, 0, 0];
     box.colors.left = [255, 255, 0];
     box.colors.right = [0, 255, 0];
     box.colors.t = [0, 0, 100];
     box.colors.bottom = [0, 0, 100];
 
-    console.log(box.getPolys().length);
-    box.transform(Math.PI / 4);
-    console.log(box.getPolys().length);
+    const newBox = new GLBox(50, 50, 50);
+    newBox.colors.front = [122, 0, 0];
+    newBox.colors.back = [122, 0, 0];
+    newBox.colors.left = [255, 255, 0];
+    newBox.colors.right = [0, 255, 0];
+    newBox.colors.t = [0, 0, 100];
+    newBox.colors.bottom = [0, 0, 100];
 
-    gl.setVertices(new Float32Array(Data.vertices));
-    gl.setColors(new Int8Array(Data.colors));
+    newBox.transformation.translate(200, 200, 200);
 
-    gl.setVertices(new Float32Array(box.getPolys()));
-    gl.setColors(new Int8Array(box.getColors()));
+    const objects = [box, newBox];
 
     const aspect = canvas.clientWidth / canvas.clientHeight; 
-
     let matrix = new PositionMatrix(4, 4, [1, 0, 0, 0,
                   0, -1, 0, 0,
                   0, 0, -1, 0,
                   0, 0, 0, 1]);
     matrix.setPerspective(Math.PI / 4, aspect, 1, 2000);
+    matrix.translate(0, 0, -560);
+    gl.setPerspective(matrix.getProjection());
 
     let last = null;
 
@@ -36,13 +39,17 @@ function main() {
         }
         let progress = t - last;
         last = t;
+
         angle = 2 * Math.PI * progress / 2000;
-        box.transform(angle);
-        gl.setVertices(new Float32Array(box.getPolys()));
-        matrix.translate(0, 0, -560);
-        gl.setPerspective(matrix.getProjection());
-        gl.draw();
-        matrix.translate(0, 0, 560);
+        box.transformation.rotateX(angle);
+        box.transformation.rotateY(angle);
+        newBox.transformation.translate(-200, -200, -200);
+        newBox.transformation.rotateX(angle);
+        newBox.transformation.rotateY(angle);
+        newBox.transformation.translate(200, 200, 200);
+
+        gl.draw(objects);
+
         requestAnimationFrame(d);
     });
 }

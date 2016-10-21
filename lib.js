@@ -27,13 +27,14 @@ function createProgram(gl, vertexShader, fragmentShader) {
 const vShaderSrc = `
         attribute vec4 a_position;
 
-        uniform mat4 u_matrix;
+        uniform mat4 u_objectTransform;
+        uniform mat4 u_projection;
 
         attribute vec4 a_color;
         varying vec4 v_color;
         
         void main() {
-            gl_Position = u_matrix * a_position;
+            gl_Position = u_projection * u_objectTransform * a_position;
             v_color = a_color;
         }
     `;
@@ -69,18 +70,31 @@ class GL {
 
         this.posLoc = gl.getAttribLocation(program, "a_position");
         this.colorLoc = gl.getAttribLocation(program, 'a_color');
-        this.matrixLoc = gl.getUniformLocation(program, 'u_matrix');
-
-        this.vertexCount = 0;
+        this.projectionLoc = gl.getUniformLocation(program, 'u_projection');
+        this.objectTransformLoc= gl.getUniformLocation(program, 'u_objectTransform');
 
         this.gl = gl;
+
+        this.objects = [];
     }
 
-    draw() {
-        const gl = this.gl;
+    addObj(obj) {
+        this.objects.push(obj);
+    }
 
+    draw(objs) {
+        const gl = this.gl;
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount);
+
+        for (let obj of objs) {
+            gl.uniformMatrix4fv(this.objectTransformLoc, false, obj.transformation.m);
+
+            let polys = obj.getPolys();
+            let colors = obj.getColors();
+            this.setVertices(new Float32Array(polys));
+            this.setColors(new Int8Array(colors));
+            gl.drawArrays(gl.TRIANGLES, 0, polys.length / 3);
+        }
     }
 
     setColors(colors) {
@@ -106,12 +120,10 @@ class GL {
         // args to vertexAttribPointer: attribute location, number of components per iteration, 
         // data type, whether data should be normalized, stride, offset
         gl.vertexAttribPointer(this.posLoc, 3, gl.FLOAT, false, 0, 0);
-
-        this.vertexCount = vertices.length / 3;
     }
 
     setPerspective(matrix) {
-        this.gl.uniformMatrix4fv(this.matrixLoc, false, matrix);
+        this.gl.uniformMatrix4fv(this.projectionLoc, false, matrix);
     }
 }
 
@@ -254,11 +266,17 @@ class PositionMatrix extends Matrix {
     }
 }
 
-class Box {
+class Brick {
     constructor(x, y, z, w, h, d) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
+
+    }
+}
+
+class GLBox {
+    constructor(w, h, d) {
+        this.x = 0;
+        this.y = 0;
+        this.z = 0;
 
         this.d = d;
         this.w = w;
@@ -273,10 +291,13 @@ class Box {
             right: [0, 0, 0],
         };
 
-        this.vertices = this.calcVertices();
-    }
+        this.transformation = new PositionMatrix(4, 4, [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+        ]);
 
-    calcVertices() {
         const t = this.y - this.h / 2;
         const bottom = this.y + this.h / 2;
         const left = this.x - this.w / 2;
@@ -284,33 +305,33 @@ class Box {
         const front = this.z - this.d / 2;
         const back = this.z + this.d / 2;
 
-        const c1 = [left, t, front];
-        const c2 = [left, bottom, front];
-        const c3 = [right, t, front];
-        const c4 = [right, bottom, front];
-        const c5 = [left, t, back];
-        const c6 = [left, bottom, back];
-        const c7 = [right, t, back];
-        const c8 = [right, bottom, back];
-        
-        return [c1, c2, c3, c4, c5, c6, c7, c8];
+        const v1 = [left, t, front];
+        const v2 = [left, bottom, front];
+        const v3 = [right, t, front];
+        const v4 = [right, bottom, front];
+        const v5 = [left, t, back];
+        const v6 = [left, bottom, back];
+        const v7 = [right, t, back];
+        const v8 = [right, bottom, back];
+
+        this.vertices = [v1, v2, v3, v4, v5, v6, v7, v8];
     }
 
     getColors() {
         let colors = this.colors;
 
         function add(arr) {
-            return [...arr, ...arr, ...arr, ...arr, ...arr, ...arr];
+            return arr.concat(arr, arr, arr, arr, arr);
         }
 
-        return [
-            ...add(colors.front),
-            ...add(colors.back),
-            ...add(colors.left),
-            ...add(colors.right),
-            ...add(colors.t),
-            ...add(colors.bottom)
-        ];
+        return [].concat(
+            add(colors.front),
+            add(colors.back),
+            add(colors.left),
+            add(colors.right),
+            add(colors.t),
+            add(colors.bottom)
+        );
     }
 
     getPolys() {
@@ -337,17 +358,5 @@ class Box {
         ];
 
         return [].concat(...arr);
-    }
-
-    getVertices() {
-        return this.vertices;
-    }
-
-    transform(x) {
-        this.vertices = this.vertices.map(v => {
-            let m = new PositionMatrix(4, 1, [v[0], v[1], v[2], 0]);
-            m.rotateX(x);
-            return [m.m[0], m.m[1], m.m[2]];
-        })
     }
 }
