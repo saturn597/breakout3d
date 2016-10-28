@@ -24,6 +24,19 @@ function createProgram(gl, vertexShader, fragmentShader) {
     gl.deleteProgram(program);
 }
 
+function randInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function randInts(min, max, num) {
+    return function* () {
+        while(num > 0) {
+            yield randInt(min, max);
+            num--;
+        }
+    }
+}
+
 const vShaderSrc = `
         attribute vec4 a_position;
 
@@ -88,7 +101,6 @@ class GL {
 
         for (let obj of objs) {
             gl.uniformMatrix4fv(this.objectTransformLoc, false, obj.transformation.m);
-
             let polys = obj.getPolys();
             let colors = obj.getColors();
             this.setVertices(new Float32Array(polys));
@@ -266,17 +278,116 @@ class PositionMatrix extends Matrix {
     }
 }
 
-class Brick {
-    constructor(x, y, z, w, h, d) {
+class Trajectory {
+    constructor(t_start, p_start, velocity) {
+        this.t_start = t_start;
+        this.p_start = p_start;
+        this.velocity = velocity;
+    }
+
+    get_position(t) {
+        return (t - t_start) * velocity + p_start;
+    }
+}
+
+function overlap(interval1, interval2) {
+    
+}
+
+class Face {
+    constructor(vertices, color) {
+        this.vertices = vertices;
+        this.color = color;
+        this.transformation = new PositionMatrix(4, 4, [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1,
+        ]);
+    }
+
+    getPolys() {
+        let v = this.vertices;
+        return [
+            ...v[0], ...v[1], ...v[2],
+            ...v[0], ...v[2], ...v[3]
+        ];
+    }
+
+    getColors() {
+        return [].concat(...Array(6).fill(this.color));
+    }
+}
+
+class FaceX extends Face {
+    constructor(x, minY, maxY, minZ, maxZ, color) {
+        const vertices = [
+            [x, minY, minZ],
+            [x, maxY, minZ],
+            [x, maxY, maxZ],
+            [x, minY, maxZ],
+        ];
+        super(vertices, color);
+    }
+
+    intersection(x, y, z, dx, dy, dz) {
 
     }
 }
 
+class FaceY extends Face {
+    constructor(y, minX, maxX, minZ, maxZ, color) {
+        const vertices = [
+            [minX, y, minZ],
+            [maxX, y, minZ],
+            [maxX, y, maxZ],
+            [minX, y, maxZ],
+        ];
+
+        super(vertices, color);
+
+        this.y = y;
+        this.minX = minX;
+        this.maxX = maxX;
+        this.minZ = minZ;
+        this.maxZ = maxZ;
+    }
+
+    intersection(x, y, z, dx, dy, dz) {
+        if (dy === 0) {
+            // This case could be handled in more detail - what if y is equal to this.y? 
+            // Not handling for now, for simplicity's sake.
+            return null;
+        }
+        let t = (this.y - y) / dy;
+        let xIntersect = x + dx * t;
+        let zIntersect = z + dz * t;
+        if (this.minX <= xIntersect && xIntersect <= this.maxX &&
+            this.minZ <= zIntersect && zIntersect <= this.maxZ) {
+            return t;
+        } else {
+            return null;
+        }
+    }
+}
+
+class FaceZ extends Face {
+    constructor(z, minX, maxX, minY, maxY, color) {
+        const vertices = [
+            [minX, minY, z],
+            [maxX, minY, z],
+            [maxX, maxY, z],
+            [minX, maxY, z],
+        ];
+        super(vertices, color);
+    }
+}
+
 class GLBox {
-    constructor(w, h, d) {
-        this.x = 0;
-        this.y = 0;
-        this.z = 0;
+    constructor(x, y, z, w, h, d) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
 
         this.d = d;
         this.w = w;
@@ -297,24 +408,30 @@ class GLBox {
             0, 0, 1, 0,
             0, 0, 0, 1
         ]);
+    }
 
-        const t = this.y - this.h / 2;
-        const bottom = this.y + this.h / 2;
-        const left = this.x - this.w / 2;
-        const right = this.x + this.w / 2;
-        const front = this.z - this.d / 2;
-        const back = this.z + this.d / 2;
+    up() {
+        return this.y - this.h / 2;
+    }
 
-        const v1 = [left, t, front];
-        const v2 = [left, bottom, front];
-        const v3 = [right, t, front];
-        const v4 = [right, bottom, front];
-        const v5 = [left, t, back];
-        const v6 = [left, bottom, back];
-        const v7 = [right, t, back];
-        const v8 = [right, bottom, back];
+    down() {
+        return this.y + this.h / 2;
+    }
 
-        this.vertices = [v1, v2, v3, v4, v5, v6, v7, v8];
+    left() {
+        return this.x - this.w / 2;
+    }
+
+    right() {
+        return this.x + this.w / 2;
+    }
+
+    front() {
+        return this.z - this.d / 2;
+    }
+
+    back() {
+        return this.z + this.d / 2;
     }
 
     getColors() {
@@ -335,7 +452,7 @@ class GLBox {
     }
 
     getPolys() {
-        let v = this.vertices;
+        let v = this.getVertices();
 
         let arr = [
             v[0], v[2], v[1],  // front
@@ -356,7 +473,46 @@ class GLBox {
             v[5], v[3], v[1],  // bottom
             v[5], v[7], v[3],
         ];
-
         return [].concat(...arr);
     }
+
+    getVertices() {
+        const up = this.up();
+        const down = this.down();
+        const left = this.left();
+        const right = this.right();
+        const front = this.front();
+        const back = this.back();
+
+        const v1 = [left, up, front];
+        const v2 = [left, down, front];
+        const v3 = [right, up, front];
+        const v4 = [right, down, front];
+        const v5 = [left, up, back];
+        const v6 = [left, down, back];
+        const v7 = [right, up, back];
+        const v8 = [right, down, back];
+
+        return [v1, v2, v3, v4, v5, v6, v7, v8];
+    }
+
+    setColors(colors) {
+        let cols = colors.slice();
+        this.colors = {
+            right: cols.splice(-3), 
+            left: cols.splice(-3), 
+            bottom: cols.splice(-3), 
+            t: cols.splice(-3), 
+            back: cols.splice(-3), 
+            front: cols.splice(-3),
+        }
+    }
 }
+
+
+class Ball extends GLBox {
+    constructor(...args) {
+        super(...args);
+    }
+}
+
