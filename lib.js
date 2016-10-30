@@ -304,6 +304,11 @@ class Face {
             0, 0, 1, 0,
             0, 0, 0, 1,
         ]);
+
+    }
+
+    getColors() {
+        return [].concat(...Array(6).fill(this.color));
     }
 
     getPolys() {
@@ -314,8 +319,92 @@ class Face {
         ];
     }
 
+}
+
+class Face2 {
+    // Represents a piece of a plane that has a constant x, y, or z, depending
+    // on value of this.orientation
+    constructor(constant, minA, maxA, minB, maxB, color, orientation) {
+        this.constant = constant;
+        this.minA = minA;
+        this.maxA = maxA;
+        this.minB = minB;
+        this.maxB = maxB;
+
+        this.color = color;
+        this.orientation = orientation;
+        this.vertices = [
+            [constant, minA, minB],
+            [constant, maxA, minB],
+            [constant, maxA, maxB],
+            [constant, minA, maxB],
+        ];
+        this.transformation = new PositionMatrix(4, 4, [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1,
+        ]);
+    }
+
+    orient(v) {
+        if (this.orientation === 0) {
+            return v;
+        }
+
+        if (this.orientation === 1) {
+            return [v[1], v[0], v[2]];
+        }
+
+        if (this.orientation === 2) {
+            return [v[1], v[2], v[0]];
+        }
+    }
+
+    rorient(v) {
+        if (this.orientation === 0) {
+            return v;
+        }
+
+        if (this.orientation === 1) {
+            return [v[1], v[0], v[2]];
+        }
+        
+        if (this.orientation === 2) {
+            return [v[2], v[0], v[1]];
+        }
+    }
+
     getColors() {
         return [].concat(...Array(6).fill(this.color));
+    }
+
+    getPolys() {
+        let v = this.vertices.map(this.orient, this);
+        return [
+            ...v[0], ...v[1], ...v[2],
+            ...v[0], ...v[2], ...v[3],
+        ];
+    }
+
+    intersection(p, v) {
+        p = this.rorient(p);
+        v = this.rorient(v);
+        if (v[0] === 0) {
+            return null;
+        }
+
+        let t = (this.constant - p[0]) / v[0];
+        let aIntersect = p[1] + v[1] * t;
+        let bIntersect = p[2] + v[2] * t;
+        if (t > 0 &&
+            this.minA <= aIntersect && aIntersect <= this.maxA &&
+            this.minB <= bIntersect && bIntersect <= this.maxB
+        ) {
+            return t;
+        }
+
+        return null;
     }
 }
 
@@ -328,10 +417,6 @@ class FaceX extends Face {
             [x, minY, maxZ],
         ];
         super(vertices, color);
-    }
-
-    intersection(x, y, z, dx, dy, dz) {
-
     }
 }
 
@@ -354,6 +439,11 @@ class FaceY extends Face {
     }
 
     intersection(x, y, z, dx, dy, dz) {
+        // Given a point object at (x, y, z) moving at a velocity of (dx, dy,
+        // dz), return the time until it intersects this face (in whatever
+        // units dx, dy, dz were measured in), or return null if no
+        // intersection will occur.
+    
         if (dy === 0) {
             // This case could be handled in more detail - what if y is equal to this.y? 
             // Not handling for now, for simplicity's sake.
@@ -362,8 +452,10 @@ class FaceY extends Face {
         let t = (this.y - y) / dy;
         let xIntersect = x + dx * t;
         let zIntersect = z + dz * t;
-        if (this.minX <= xIntersect && xIntersect <= this.maxX &&
-            this.minZ <= zIntersect && zIntersect <= this.maxZ) {
+        if (t > 0 && 
+            this.minX <= xIntersect && xIntersect <= this.maxX &&
+            this.minZ <= zIntersect && zIntersect <= this.maxZ
+            ) {
             return t;
         } else {
             return null;
