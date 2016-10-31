@@ -10,7 +10,7 @@ function main() {
     box.colors.t = [0, 0, 100];
     box.colors.bottom = [0, 0, 100];
 
-    const newBox = new Ball(-400, 0, -100, 50, 50, 50);
+    const newBox = new Ball(0, 0, 150, 20, 20, 20);
     newBox.colors.front = [122, 0, 0];
     newBox.colors.back = [122, 0, 0];
     newBox.colors.left = [255, 255, 0];
@@ -18,9 +18,25 @@ function main() {
     newBox.colors.t = [0, 0, 100];
     newBox.colors.bottom = [0, 0, 100];
 
-    let color = [0, 0, 100];
-    const f2Test = new Face2(50, -200, 200, -300, 300, color,0);
-    const objects = [f2Test, newBox];
+    let color = [0, 0, 255];
+    /*const walls = [
+        new Face2(400, -400, 400, -700, 700, color, 0),
+        new Face2(-400, -400, 400, -700, 700, color, 0),
+        new Face2(700, -700, 700, -400, 400, [255, 0, 0], 2),
+        new Face2(-200, -700, 700, -400, 400, [255, 0, 0], 2),
+        ];*/
+    const walls = [
+        new Face2(200, -150, 150, -200, 200, [255, 0, 0], 2),
+        new Face2(0, -150, 150, -200, 200, [100, 0, 0], 2),
+        new Face2(-150, -200, 200, 0, 200, [0, 255, 0], 0),
+        new Face2(150, -200, 200, 0, 200, [0, 255, 0], 0),
+        new Face2(200, -150, 150, 0, 200, [0, 0, 255], 1),
+        new Face2(-200, -150, 150, 0, 200, [0, 0, 255], 1),
+    ];
+    //walls[3].visible = false;
+    walls[1].visible = false;
+    const rightWall = new Face2(150, -200, 200, -300, 300, color, 0);
+    const objects = [...walls, newBox];
     /*
     let colorIter = {};
     let rc = () => [randInt(0, 255), randInt(0, 255), randInt(0, 255)];
@@ -56,29 +72,24 @@ function main() {
     }*/
 
     requestAnimationFrame(function d(t) {
-        if (!last) {
-            last = t;
+        if (!newBox.hasTrajectory) {
+            newBox.setTrajectory([0.5, 1, 0.5], t, walls);
         }
-        let progress = t - last;
-        last = t;
 
-        let angle = 2 * Math.PI * progress / 2000;
-        let distance = progress / 4;
-        newBox.x += dir * distance;
-        if (newBox.x > 300) {
-            dir = -1;
+        newBox.update(t);
+
+        /*if (newBox.x > 300) {
+            newBox.setTrajectory([-0.500, 0, 0], t, [objects[0]]);
         } else if (newBox.x < -300) {
-            dir = 1;
-        }
+            newBox.setTrajectory([0.500, 0, 0], t, [objects[0]]);
+        }*/
 
         /*for (obj of objects) {
             obj.transform.call(obj.transformation, angle);
         }*/
-        let collisionTime = objects[0].intersection([newBox.right(), newBox.down(), newBox.front()], [250*dir, 0, 0]);
-        console.log(collisionTime);
         gl.draw(objects);
 
-        if (collisionTime !== null) requestAnimationFrame(d);
+        requestAnimationFrame(d);
     });
 }
 

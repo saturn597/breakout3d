@@ -100,12 +100,14 @@ class GL {
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
         for (let obj of objs) {
-            gl.uniformMatrix4fv(this.objectTransformLoc, false, obj.transformation.m);
-            let polys = obj.getPolys();
-            let colors = obj.getColors();
-            this.setVertices(new Float32Array(polys));
-            this.setColors(new Int8Array(colors));
-            gl.drawArrays(gl.TRIANGLES, 0, polys.length / 3);
+            if (obj.visible) {
+                gl.uniformMatrix4fv(this.objectTransformLoc, false, obj.transformation.m);
+                let polys = obj.getPolys();
+                let colors = obj.getColors();
+                this.setVertices(new Float32Array(polys));
+                this.setColors(new Int8Array(colors));
+                gl.drawArrays(gl.TRIANGLES, 0, polys.length / 3);
+            }
         }
     }
 
@@ -296,6 +298,7 @@ function overlap(interval1, interval2) {
 
 class Face {
     constructor(vertices, color) {
+        this.visible = true;
         this.vertices = vertices;
         this.color = color;
         this.transformation = new PositionMatrix(4, 4, [
@@ -345,6 +348,8 @@ class Face2 {
             0, 0, 1, 0,
             0, 0, 0, 1,
         ]);
+
+        this.visible = true;
     }
 
     orient(v) {
@@ -500,6 +505,8 @@ class GLBox {
             0, 0, 1, 0,
             0, 0, 0, 1
         ]);
+
+        this.visible = true;
     }
 
     up() {
@@ -605,6 +612,64 @@ class GLBox {
 class Ball extends GLBox {
     constructor(...args) {
         super(...args);
+        this.v = 0;
+        this.faces = [];
+        this.hasTrajectory = false;
+    }
+
+    setTrajectory(v, t, faces) {
+        this.v = v;
+        this.initialT = t;
+        this.initialP = [this.x, this.y, this.z];
+        this.faces = faces;
+
+        // Figure out the first face we're going to collide with.  Our
+        // trajectory will have to change when we collide - set collisionT to
+        // the time that collision occurs, so that we can deal with it when it
+        // comes up. If we're going to collide with multiple faces, we should
+        // know that too.
+        let soonestTime = null;
+        let soonestFaces = [];
+        let times = [];
+        for (let face of faces) {
+            let collTime = Math.min(...this.getVertices().
+                map(p => face.intersection(p, this.v)).
+                filter(t => t !== null));
+            if (soonestTime === null || collTime <= soonestTime) {
+                if (soonestTime === collTime) {
+                    soonestFaces.push(face);
+                } else {
+                    soonestFaces = [face];
+                }
+                soonestTime = collTime;
+            }
+        }
+        this.collisionT = t + soonestTime;
+        this.collisionFaces = soonestFaces;
+        
+        this.hasTrajectory = true;
+    }
+
+    update(t) {
+        if (t > this.collisionT) {
+            // we collided, so change our trajectory so that we "bounce" in the
+            // other direction
+            this.update(this.collisionT);
+            const newV = this.v.slice();
+            for (let f of this.collisionFaces) {
+                let o = f.orientation;
+                newV[o] = -newV[o];
+            }
+            this.setTrajectory(newV, this.collisionT, this.faces);
+            this.update(t);
+            return;
+        };
+
+        const elapsed = t - this.initialT;
+
+        this.x = this.initialP[0] + this.v[0] * elapsed;
+        this.y = this.initialP[1] + this.v[1] * elapsed;
+        this.z = this.initialP[2] + this.v[2] * elapsed;
     }
 }
 
