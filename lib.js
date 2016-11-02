@@ -136,8 +136,31 @@ class GL {
         gl.vertexAttribPointer(this.posLoc, 3, gl.FLOAT, false, 0, 0);
     }
 
-    setPerspective(matrix) {
-        this.gl.uniformMatrix4fv(this.projectionLoc, false, matrix);
+    setPerspective(fov, aspect, near, far) {
+        // https://unspecified.wordpress.com/2012/06/21/calculating-the-gluperspective-matrix-and-other-opengl-matrix-maths/
+        
+        // Sets the perspective matrix used by this GL context, based on the
+        // provided parameters.
+        //
+        // As a convenience, returns the maximum visible x and y values at the
+        // "near" z value (useful for setting up walls along the "edge" of the
+        // display
+
+        const f = Math.tan(Math.PI * 0.5 - 0.5 * fov);
+        const rangeInv = 1.0 / (near - far);
+        this.perspectiveMatrix = [
+            f / aspect, 0, 0, 0,
+            0, f, 0, 0,
+            0, 0, -(near + far) * rangeInv, 1,
+            0, 0, near * far * rangeInv * 2, 0,
+        ];
+
+        this.gl.uniformMatrix4fv(this.projectionLoc, false, this.perspectiveMatrix);
+        
+        return {
+            x: (near * aspect) / f,
+            y: (near / f)
+        }
     }
 }
 
@@ -210,15 +233,6 @@ class PositionMatrix extends Matrix {
     }
 
     setPerspective(fov, aspect, near, far) {
-        // https://unspecified.wordpress.com/2012/06/21/calculating-the-gluperspective-matrix-and-other-opengl-matrix-maths/
-        const f = Math.tan(Math.PI * 0.5 - 0.5 * fov);
-        const rangeInv = 1.0 / (near - far);
-        this.projectionMatrix = new Matrix(4, 4, [
-            f / aspect, 0, 0, 0,
-            0, f, 0, 0,
-            0, 0, (near + far) * rangeInv, -1,
-            0, 0, near * far * rangeInv * 2, 0,
-        ]);
     }
 
     translate(tx, ty, tz) {
@@ -625,9 +639,9 @@ class Ball extends GLBox {
 
         // Figure out the first face we're going to collide with.  Our
         // trajectory will have to change when we collide - set collisionT to
-        // the time that collision occurs, so that we can deal with it when it
-        // comes up. If we're going to collide with multiple faces, we should
-        // know that too.
+        // the time that collision will occur, so that we can deal with it when
+        // it comes up. If we're going to collide with multiple faces
+        // simultaneously, we should know that too.
         let soonestTime = null;
         let soonestFaces = [];
         let times = [];
@@ -652,9 +666,14 @@ class Ball extends GLBox {
 
     update(t) {
         if (t > this.collisionT) {
-            // we collided, so change our trajectory so that we "bounce" in the
+            // We collided, so change our trajectory so that we "bounce" in the
             // other direction
-            this.update(this.collisionT);
+            
+            // Start by updating to just BEFORE the collision.  Updating to
+            // exactly the collision time sometimes puts the ball just past
+            // where it should be (and hence it overlaps what it shouldn't) due
+            // to floating point imprecision
+            this.update(this.collisionT - 1);
             const newV = this.v.slice();
             for (let f of this.collisionFaces) {
                 let o = f.orientation;
