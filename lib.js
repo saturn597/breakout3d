@@ -136,31 +136,38 @@ class GL {
         gl.vertexAttribPointer(this.posLoc, 3, gl.FLOAT, false, 0, 0);
     }
 
-    setPerspective(fov, aspect, near, far) {
+    setPerspective(fov, aspect, near, far, xMax, yMax) {
         // https://unspecified.wordpress.com/2012/06/21/calculating-the-gluperspective-matrix-and-other-opengl-matrix-maths/
         
         // Sets the perspective matrix used by this GL context, based on the
         // provided parameters.
         //
-        // As a convenience, returns the maximum visible x and y values at the
-        // "near" z value (useful for setting up walls along the "edge" of the
-        // display
+        // fov: the angle in radians of the field of view
+        // aspect: the aspect ratio of the display area (like canvas width / height)
+        // near: the "near" z value - vertices nearer than this z value are clipped
+        // far: the max z value - vertices farther than this z value are clipped
+        // xMax: the largest x value visible at z = near
+        // yMax: the largest y value visible at z = near
 
         const f = Math.tan(Math.PI * 0.5 - 0.5 * fov);
         const rangeInv = 1.0 / (near - far);
-        this.perspectiveMatrix = [
+        const matrix = new PositionMatrix(4, 4, [
             f / aspect, 0, 0, 0,
             0, f, 0, 0,
             0, 0, -(near + far) * rangeInv, 1,
             0, 0, near * far * rangeInv * 2, 0,
-        ];
+        ]);
 
-        this.gl.uniformMatrix4fv(this.projectionLoc, false, this.perspectiveMatrix);
-        
-        return {
-            x: (near * aspect) / f,
-            y: (near / f)
-        }
+        const oldXMax = (near * aspect) / f;
+        const oldYMax = near / f;
+
+        matrix.scale(
+            oldXMax / xMax,
+            oldYMax / yMax,
+            1
+        );
+
+        this.gl.uniformMatrix4fv(this.projectionLoc, false, matrix.m);
     }
 }
 
@@ -622,6 +629,8 @@ class GLBox {
     }
 }
 
+class Brick extends GLBox {
+}
 
 class Ball extends GLBox {
     constructor(...args) {

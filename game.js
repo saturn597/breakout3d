@@ -8,13 +8,18 @@ function main() {
         depth: 75
     };
 
+    // Set these three values to adjust the dimensions of the game area
+    const xMax = 300;
+    const yMax = 300;
+    const zMax = 4000;
+
     const zMin = 700;
-    const zMax = 3000;
-    const aspect = canvas.clientWidth / canvas.clientHeight; 
+
     const fov = Math.PI / 4;
 
-    const { x: xMax, y: yMax } = 
-        gl.setPerspective(fov, aspect, zMin, zMax + 1);
+    const aspect = canvas.clientWidth / canvas.clientHeight; 
+
+    gl.setPerspective(fov, aspect, zMin, zMax + 1, xMax, yMax);
 
     let xMin = -xMax;
     let yMin = -yMax;
