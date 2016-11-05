@@ -151,6 +151,7 @@ class GL {
 
         const f = Math.tan(Math.PI * 0.5 - 0.5 * fov);
         const rangeInv = 1.0 / (near - far);
+
         const matrix = new PositionMatrix(4, 4, [
             f / aspect, 0, 0, 0,
             0, f, 0, 0,
@@ -239,9 +240,6 @@ class PositionMatrix extends Matrix {
         ]);
     }
 
-    setPerspective(fov, aspect, near, far) {
-    }
-
     translate(tx, ty, tz) {
         this.multiply_update(new PositionMatrix(4, 4, [
             1, 0, 0, 0,
@@ -301,51 +299,7 @@ class PositionMatrix extends Matrix {
     }
 }
 
-class Trajectory {
-    constructor(t_start, p_start, velocity) {
-        this.t_start = t_start;
-        this.p_start = p_start;
-        this.velocity = velocity;
-    }
-
-    get_position(t) {
-        return (t - t_start) * velocity + p_start;
-    }
-}
-
-function overlap(interval1, interval2) {
-    
-}
-
 class Face {
-    constructor(vertices, color) {
-        this.visible = true;
-        this.vertices = vertices;
-        this.color = color;
-        this.transformation = new PositionMatrix(4, 4, [
-            1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1,
-        ]);
-
-    }
-
-    getColors() {
-        return [].concat(...Array(6).fill(this.color));
-    }
-
-    getPolys() {
-        let v = this.vertices;
-        return [
-            ...v[0], ...v[1], ...v[2],
-            ...v[0], ...v[2], ...v[3]
-        ];
-    }
-
-}
-
-class Face2 {
     // Represents a piece of a plane that has a constant x, y, or z, depending
     // on value of this.orientation
     constructor(constant, minA, maxA, minB, maxB, color, orientation) {
@@ -434,82 +388,33 @@ class Face2 {
     }
 }
 
-class FaceX extends Face {
-    constructor(x, minY, maxY, minZ, maxZ, color) {
-        const vertices = [
-            [x, minY, minZ],
-            [x, maxY, minZ],
-            [x, maxY, maxZ],
-            [x, minY, maxZ],
-        ];
-        super(vertices, color);
-    }
-}
-
-class FaceY extends Face {
-    constructor(y, minX, maxX, minZ, maxZ, color) {
-        const vertices = [
-            [minX, y, minZ],
-            [maxX, y, minZ],
-            [maxX, y, maxZ],
-            [minX, y, maxZ],
-        ];
-
-        super(vertices, color);
-
-        this.y = y;
-        this.minX = minX;
-        this.maxX = maxX;
-        this.minZ = minZ;
-        this.maxZ = maxZ;
-    }
-
-    intersection(x, y, z, dx, dy, dz) {
-        // Given a point object at (x, y, z) moving at a velocity of (dx, dy,
-        // dz), return the time until it intersects this face (in whatever
-        // units dx, dy, dz were measured in), or return null if no
-        // intersection will occur.
-    
-        if (dy === 0) {
-            // This case could be handled in more detail - what if y is equal to this.y? 
-            // Not handling for now, for simplicity's sake.
-            return null;
-        }
-        let t = (this.y - y) / dy;
-        let xIntersect = x + dx * t;
-        let zIntersect = z + dz * t;
-        if (t > 0 && 
-            this.minX <= xIntersect && xIntersect <= this.maxX &&
-            this.minZ <= zIntersect && zIntersect <= this.maxZ
-            ) {
-            return t;
-        } else {
-            return null;
-        }
-    }
-}
-
-class FaceZ extends Face {
-    constructor(z, minX, maxX, minY, maxY, color) {
-        const vertices = [
-            [minX, minY, z],
-            [maxX, minY, z],
-            [maxX, maxY, z],
-            [minX, maxY, z],
-        ];
-        super(vertices, color);
-    }
-}
-
 class GLBox {
-    constructor(x, y, z, w, h, d) {
+    constructor(x, y, z, width, height, depth) {
         this.x = x;
         this.y = y;
         this.z = z;
 
-        this.d = d;
-        this.w = w;
-        this.h = h;
+        this.w = width;
+        this.h = height;
+        this.d = depth;
+
+        const [u, d, l, r, f, b] = [
+            this.up(),
+            this.down(),
+            this.left(), 
+            this.right(), 
+            this.front(),
+            this.back()
+        ];
+
+        this.faces = [
+            new Face(l, u, d, f, b, [0, 0, 0], 0),
+            new Face(r, u, d, f, b, [0, 0, 0], 0),
+            new Face(u, l, r, f, b, [0, 0, 0], 1),
+            new Face(d, l, r, f, b, [0, 0, 0], 1),
+            new Face(f, l, r, u, d, [0, 0, 0], 2),
+            new Face(b, l, r, u, d, [0, 0, 0], 2),
+        ];
 
         this.colors = {
             front: [0, 0, 0],
@@ -629,52 +534,46 @@ class GLBox {
     }
 }
 
-class Brick extends GLBox {
-}
-
 class Ball extends GLBox {
     constructor(...args) {
         super(...args);
         this.v = 0;
-        this.faces = [];
-        this.hasTrajectory = false;
+        this.collidables = [];
     }
 
-    setTrajectory(v, t, faces) {
+    setTrajectory(v, t, collidables) {
         this.v = v;
-        this.initialT = t;
-        this.initialP = [this.x, this.y, this.z];
-        this.faces = faces;
+        this.initialTime = t;
+        this.initialPosition = [this.x, this.y, this.z];
+        this.collidables = collidables;
 
-        // Figure out the first face we're going to collide with.  Our
-        // trajectory will have to change when we collide - set collisionT to
-        // the time that collision will occur, so that we can deal with it when
-        // it comes up. If we're going to collide with multiple faces
-        // simultaneously, we should know that too.
+        // Figure out the next object(s) we're going to collide with.  Our
+        // trajectory will have to change when we collide - set collisionTime
+        // to the time the collision will occur, so that we can deal with it
+        // then. We might collide with multiple objects at once, so store all
+        // of the objects if so.
         let soonestTime = null;
-        let soonestFaces = [];
+        let collisions = [];  // Array of objects we're going to collide with
         let times = [];
-        for (let face of faces) {
+        for (let obj of collidables) {
             let collTime = Math.min(...this.getVertices().
-                map(p => face.intersection(p, this.v)).
+                map(p => obj.intersection(p, this.v)).
                 filter(t => t !== null));
             if (soonestTime === null || collTime <= soonestTime) {
                 if (soonestTime === collTime) {
-                    soonestFaces.push(face);
+                    collisions.push(obj);
                 } else {
-                    soonestFaces = [face];
+                    collisions = [obj];
                 }
                 soonestTime = collTime;
             }
         }
-        this.collisionT = t + soonestTime;
-        this.collisionFaces = soonestFaces;
-        
-        this.hasTrajectory = true;
+        this.collisionTime = t + soonestTime;
+        this.collisionFaces = collisions;
     }
 
     update(t) {
-        if (t > this.collisionT) {
+        if (t > this.collisionTime) {
             // We collided, so change our trajectory so that we "bounce" in the
             // other direction
             
@@ -682,22 +581,22 @@ class Ball extends GLBox {
             // exactly the collision time sometimes puts the ball just past
             // where it should be (and hence it overlaps what it shouldn't) due
             // to floating point imprecision
-            this.update(this.collisionT - 1);
+            this.update(this.collisionTime - 1);
             const newV = this.v.slice();
             for (let f of this.collisionFaces) {
                 let o = f.orientation;
                 newV[o] = -newV[o];
             }
-            this.setTrajectory(newV, this.collisionT, this.faces);
+            this.setTrajectory(newV, this.collisionTime, this.collidables);
             this.update(t);
             return;
         };
 
-        const elapsed = t - this.initialT;
+        const elapsed = t - this.initialTime;
 
-        this.x = this.initialP[0] + this.v[0] * elapsed;
-        this.y = this.initialP[1] + this.v[1] * elapsed;
-        this.z = this.initialP[2] + this.v[2] * elapsed;
+        this.x = this.initialPosition[0] + this.v[0] * elapsed;
+        this.y = this.initialPosition[1] + this.v[1] * elapsed;
+        this.z = this.initialPosition[2] + this.v[2] * elapsed;
     }
 }
 

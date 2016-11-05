@@ -3,9 +3,9 @@ function main() {
     const gl = new GL(canvas);
 
     const boxDims = {
-        width: 75,
-        height: 75,
-        depth: 75
+        width: 80,
+        height: 80,
+        depth: 80
     };
 
     // Set these three values to adjust the dimensions of the game area
@@ -19,19 +19,21 @@ function main() {
 
     const aspect = canvas.clientWidth / canvas.clientHeight; 
 
-    gl.setPerspective(fov, aspect, zMin, zMax + 1, xMax, yMax);
+    gl.setPerspective(fov, aspect, zMin - 1, zMax + 1, xMax, yMax);
 
     let xMin = -xMax;
     let yMin = -yMax;
     const walls = [
-        new Face2(xMin, yMin, yMax, zMin, zMax, [0, 255, 0], 0),
-        new Face2(xMax, yMin, yMax, zMin, zMax, [0, 255, 0], 0),
-        new Face2(yMax, xMin, xMax, zMin, zMax, [0, 0, 255], 1),
-        new Face2(yMin, xMin, xMax, zMin, zMax, [0, 0, 255], 1),
-        new Face2(zMax, xMin, xMax, yMin, yMax, [255, 0, 0], 2),
-        new Face2(zMin, xMin, xMax, yMin, yMax, [100, 0, 0], 2),
+        new Face(xMin, yMin, yMax, zMin, zMax, [0, 255, 0], 0),
+        new Face(xMax, yMin, yMax, zMin, zMax, [0, 255, 0], 0),
+        new Face(yMax, xMin, xMax, zMin, zMax, [0, 0, 255], 1),
+        new Face(yMin, xMin, xMax, zMin, zMax, [0, 0, 255], 1),
+        new Face(zMax, xMin, xMax, yMin, yMax, [255, 0, 0], 2),
+        new Face(zMin, xMin, xMax, yMin, yMax, [100, 0, 0], 2),
     ];
 
+    // This is the wall closest to the viewer - it shouldn't be visible, we
+    // just want it there so the ball boucnes when it gets close enough
     walls[5].visible = false;
 
     const newBox = new Ball(
@@ -51,11 +53,9 @@ function main() {
 
     const objects = [...walls, newBox];
 
-    requestAnimationFrame(function d(t) {
-        if (!newBox.hasTrajectory) {
-            newBox.setTrajectory([-0.5, 1, 5], t, walls);
-        }
+    newBox.setTrajectory([-0.5, 1, 5], performance.now(), walls);
 
+    requestAnimationFrame(function d(t) {
         newBox.update(t);
 
         gl.draw(objects);
