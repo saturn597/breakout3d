@@ -24,16 +24,16 @@ function main() {
     let xMin = -xMax;
     let yMin = -yMax;
     const walls = [
-        new Face(xMin, yMin, yMax, zMin, zMax, [0, 255, 0], 0),
-        new Face(xMax, yMin, yMax, zMin, zMax, [0, 255, 0], 0),
-        new Face(yMax, xMin, xMax, zMin, zMax, [0, 0, 255], 1),
-        new Face(yMin, xMin, xMax, zMin, zMax, [0, 0, 255], 1),
-        new Face(zMax, xMin, xMax, yMin, yMax, [255, 0, 0], 2),
-        new Face(zMin, xMin, xMax, yMin, yMax, [100, 0, 0], 2),
+        makeFace(xMin, yMin, yMax, zMin, zMax, [0, 255, 0], 0),
+        makeFace(xMax, yMin, yMax, zMin, zMax, [0, 255, 0], 0),
+        makeFace(yMax, xMin, xMax, zMin, zMax, [0, 0, 255], 1),
+        makeFace(yMin, xMin, xMax, zMin, zMax, [0, 0, 255], 1),
+        makeFace(zMax, xMin, xMax, yMin, yMax, [255, 0, 0], 2),
+        makeFace(zMin, xMin, xMax, yMin, yMax, [100, 0, 0], 2),
     ];
 
     // This is the wall closest to the viewer - it shouldn't be visible, we
-    // just want it there so the ball boucnes when it gets close enough
+    // just want it there so the ball bounces when it gets close enough
     walls[5].visible = false;
 
     const newBox = new Ball(
@@ -48,17 +48,23 @@ function main() {
     newBox.colors.back = [122, 0, 0];
     newBox.colors.left = [255, 255, 0];
     newBox.colors.right = [0, 255, 0];
-    newBox.colors.t = [0, 0, 100];
-    newBox.colors.bottom = [0, 0, 100];
+    newBox.colors.up = [0, 0, 100];
+    newBox.colors.down = [0, 0, 100];
 
-    const objects = [...walls, newBox];
+    const bigBox = new Ball(0, 0, 2000, 500, 500, 50);
+    bigBox.colors.front = [122, 255, 255];
 
-    newBox.setTrajectory([-0.5, 1, 5], performance.now(), walls);
+    const objects = [...walls, newBox, bigBox];
+    const collidables = [...walls, ...bigBox.faces];
 
     requestAnimationFrame(function d(t) {
-        newBox.update(t);
+        if (!newBox.hasTrajectory) {
+            newBox.setTrajectory([-0.5, 1, 5], t, collidables);
+        }
 
         gl.draw(objects);
+
+        newBox.update(t);
 
         requestAnimationFrame(d);
     });

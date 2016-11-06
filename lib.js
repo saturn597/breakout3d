@@ -299,24 +299,38 @@ class PositionMatrix extends Matrix {
     }
 }
 
+function makeFace(constant, minA, maxA, minB, maxB, color, orientation) {
+    const dimA = maxA - minA;
+    const dimB = maxB - minB;
+    const position = [
+        constant,
+        minA + dimA / 2,
+        minB + dimB / 2
+    ];
+
+    let adjPos;
+    if (orientation === 0) {
+        adjPos = position;
+    } else if (orientation === 1) {
+        adjPos = [position[1], position[0], position[2]];
+    } else if (orientation === 2) {
+        adjPos = [position[1], position[2], position[0]];
+    }
+
+    return new Face(adjPos, dimA, dimB, color, orientation);
+}
+
 class Face {
     // Represents a piece of a plane that has a constant x, y, or z, depending
     // on value of this.orientation
-    constructor(constant, minA, maxA, minB, maxB, color, orientation) {
-        this.constant = constant;
-        this.minA = minA;
-        this.maxA = maxA;
-        this.minB = minB;
-        this.maxB = maxB;
+    constructor(position, dimA, dimB, color, orientation) {
+        [this.x, this.y, this.z] = position;
+        this.dimA = dimA;
+        this.dimB = dimB;
 
         this.color = color;
         this.orientation = orientation;
-        this.vertices = [
-            [constant, minA, minB],
-            [constant, maxA, minB],
-            [constant, maxA, maxB],
-            [constant, minA, maxB],
-        ];
+
         this.transformation = new PositionMatrix(4, 4, [
             1, 0, 0, 0,
             0, 1, 0, 0,
@@ -325,6 +339,43 @@ class Face {
         ]);
 
         this.visible = true;
+    }
+
+    get a() {
+        return this.orientation === 0 ? this.y : this.x;
+    }
+
+    get b() {
+        return this.orientation === 2 ? this.y: this.z;
+    }
+
+    get constant() {
+        return [this.x, this.y, this.z][this.orientation];
+    }
+
+    get minA() {
+        return this.a - this.dimA / 2;
+    }
+
+    get maxA() {
+        return this.a + this.dimA / 2;
+    }
+
+    get minB() {
+        return this.b - this.dimB / 2;
+    }
+
+    get maxB() {
+        return this.b + this.dimB / 2;
+    }
+
+    get vertices() {
+        return [
+            [this.constant, this.minA, this.minB],
+            [this.constant, this.maxA, this.minB],
+            [this.constant, this.maxA, this.maxB],
+            [this.constant, this.minA, this.maxB],
+        ];
     }
 
     orient(v) {
@@ -406,21 +457,21 @@ class GLBox {
             this.front(),
             this.back()
         ];
-
+        
         this.faces = [
-            new Face(l, u, d, f, b, [0, 0, 0], 0),
-            new Face(r, u, d, f, b, [0, 0, 0], 0),
-            new Face(u, l, r, f, b, [0, 0, 0], 1),
-            new Face(d, l, r, f, b, [0, 0, 0], 1),
-            new Face(f, l, r, u, d, [0, 0, 0], 2),
-            new Face(b, l, r, u, d, [0, 0, 0], 2),
+            new Face([x, y, f], width, height, [0, 0, 0], 2),
+            new Face([x, y, b], width, height, [0, 0, 0], 2),
+            new Face([l, y, z], height, depth, [0, 0, 0], 0),
+            new Face([r, y, z], height, depth, [0, 0, 0], 0),
+            new Face([x, u, z], width, depth, [0, 0, 0], 1),
+            new Face([x, d, z], width, depth, [0, 0, 0], 1),
         ];
-
+       
         this.colors = {
             front: [0, 0, 0],
             back: [0, 0, 0],
-            t: [0, 0, 0],
-            bottom: [0, 0, 0],
+            up: [0, 0, 0],
+            down: [0, 0, 0],
             left: [0, 0, 0],
             right: [0, 0, 0],
         };
@@ -471,13 +522,15 @@ class GLBox {
             add(colors.back),
             add(colors.left),
             add(colors.right),
-            add(colors.t),
-            add(colors.bottom)
+            add(colors.up),
+            add(colors.down)
         );
     }
 
     getPolys() {
-        let v = this.getVertices();
+        let res = [].concat(...this.faces.map(f => f.getPolys()));
+        return res;
+        /*let v = this.getVertices();
 
         let arr = [
             v[0], v[2], v[1],  // front
@@ -498,7 +551,7 @@ class GLBox {
             v[5], v[3], v[1],  // bottom
             v[5], v[7], v[3],
         ];
-        return [].concat(...arr);
+        return [].concat(...arr);*/
     }
 
     getVertices() {
@@ -530,6 +583,20 @@ class GLBox {
             t: cols.splice(-3), 
             back: cols.splice(-3), 
             front: cols.splice(-3),
+        }
+    }
+
+    move(x, y, z) {
+        const dx = x - this.x;
+        const dy = y - this.y;
+        const dz = z - this.z;
+
+        this.x = x;
+        this.y = y;
+        this.z = z;
+
+        for (let f of this.faces) {
+            [f.x, f.y, f.z] = [f.x + dx, f.y + dy, f.z + dz];
         }
     }
 }
@@ -570,6 +637,8 @@ class Ball extends GLBox {
         }
         this.collisionTime = t + soonestTime;
         this.collisionFaces = collisions;
+
+        this.hasTrajectory = true;
     }
 
     update(t) {
@@ -591,12 +660,14 @@ class Ball extends GLBox {
             this.update(t);
             return;
         };
-
+   
         const elapsed = t - this.initialTime;
 
-        this.x = this.initialPosition[0] + this.v[0] * elapsed;
-        this.y = this.initialPosition[1] + this.v[1] * elapsed;
-        this.z = this.initialPosition[2] + this.v[2] * elapsed;
+        this.move(
+            this.initialPosition[0] + this.v[0] * elapsed,
+            this.initialPosition[1] + this.v[1] * elapsed,
+            this.initialPosition[2] + this.v[2] * elapsed
+        );
     }
 }
 
