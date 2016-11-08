@@ -19,7 +19,7 @@ function createProgram(gl, vertexShader, fragmentShader) {
     if (gl.getProgramParameter(program, gl.LINK_STATUS)) {
         return program;
     }
-    
+
     console.log(gl.getProgramInfoLog(program));
     gl.deleteProgram(program);
 }
@@ -45,7 +45,7 @@ const vShaderSrc = `
 
         attribute vec4 a_color;
         varying vec4 v_color;
-        
+
         void main() {
             gl_Position = u_projection * u_objectTransform * a_position;
             v_color = a_color;
@@ -131,14 +131,14 @@ class GL {
         // Connect the buffered data to the attribute a_position in our vShader
         gl.enableVertexAttribArray(this.posLoc);
 
-        // args to vertexAttribPointer: attribute location, number of components per iteration, 
+        // args to vertexAttribPointer: attribute location, number of components per iteration,
         // data type, whether data should be normalized, stride, offset
         gl.vertexAttribPointer(this.posLoc, 3, gl.FLOAT, false, 0, 0);
     }
 
     setPerspective(fov, aspect, near, far, xMax, yMax) {
         // https://unspecified.wordpress.com/2012/06/21/calculating-the-gluperspective-matrix-and-other-opengl-matrix-maths/
-        
+
         // Sets the perspective matrix used by this GL context, based on the
         // provided parameters.
         //
@@ -178,7 +178,7 @@ class Matrix {
             initial = Array(w * h).fill(0);
         }
         if (initial.length != w * h) {
-            throw 'Initial value isn\'t the right length'; 
+            throw 'Initial value isn\'t the right length';
         }
         this.w = w;
         this.h = h;
@@ -199,7 +199,7 @@ class Matrix {
                 newM.push(e);
             }
         }
-        return new Matrix(m2.w, m1.h, newM); 
+        return new Matrix(m2.w, m1.h, newM);
     }
 
     get(x, y) {
@@ -243,12 +243,12 @@ class PositionMatrix extends Matrix {
     translate(tx, ty, tz) {
         this.multiply_update(new PositionMatrix(4, 4, [
             1, 0, 0, 0,
-            0, 1, 0, 0, 
+            0, 1, 0, 0,
             0, 0, 1, 0,
             tx, ty, tz, 1
         ]));
     }
- 
+
     scale(sx, sy, sz) {
         this.multiply_update(new PositionMatrix(4, 4, [
             sx, 0, 0, 0,
@@ -400,7 +400,7 @@ class Face {
         if (this.orientation === 1) {
             return [v[1], v[0], v[2]];
         }
-        
+
         if (this.orientation === 2) {
             return [v[2], v[0], v[1]];
         }
@@ -432,10 +432,13 @@ class Face {
             this.minA <= aIntersect && aIntersect <= this.maxA &&
             this.minB <= bIntersect && bIntersect <= this.maxB
         ) {
-            return t;
+            return [t, this.orientation];
         }
 
         return null;
+    }
+
+    onCollision() {
     }
 }
 
@@ -452,12 +455,12 @@ class GLBox {
         const [u, d, l, r, f, b] = [
             this.up(),
             this.down(),
-            this.left(), 
-            this.right(), 
+            this.left(),
+            this.right(),
             this.front(),
             this.back()
         ];
-        
+
         this.faces = [
             new Face([x, y, f], width, height, [0, 0, 0], 2),
             new Face([x, y, b], width, height, [0, 0, 0], 2),
@@ -466,7 +469,7 @@ class GLBox {
             new Face([x, u, z], width, depth, [0, 0, 0], 1),
             new Face([x, d, z], width, depth, [0, 0, 0], 1),
         ];
-       
+
         this.colors = {
             front: [0, 0, 0],
             back: [0, 0, 0],
@@ -574,16 +577,14 @@ class GLBox {
         return [v1, v2, v3, v4, v5, v6, v7, v8];
     }
 
-    setColors(colors) {
-        let cols = colors.slice();
-        this.colors = {
-            right: cols.splice(-3), 
-            left: cols.splice(-3), 
-            bottom: cols.splice(-3), 
-            t: cols.splice(-3), 
-            back: cols.splice(-3), 
-            front: cols.splice(-3),
+    intersection(p, v) {
+        const res = this.faces.map(f => f.intersection(p, v)).
+            filter(c => c !== null).
+            sort((a, b) => a[0] > b[0] ? 1 : -1);
+        if (res.length > 0) {
+            return res[0];
         }
+        return null;
     }
 
     move(x, y, z) {
@@ -599,6 +600,23 @@ class GLBox {
             [f.x, f.y, f.z] = [f.x + dx, f.y + dy, f.z + dz];
         }
     }
+
+    onCollision() {}
+
+    setColors(colors) {
+        let cols = colors.slice();
+        this.colors = {
+            right: cols.splice(-3),
+            left: cols.splice(-3),
+            bottom: cols.splice(-3),
+            t: cols.splice(-3),
+            back: cols.splice(-3),
+            front: cols.splice(-3),
+        }
+    }
+}
+
+class Brick extends GLBox {
 }
 
 class Ball extends GLBox {
@@ -619,24 +637,32 @@ class Ball extends GLBox {
         // to the time the collision will occur, so that we can deal with it
         // then. We might collide with multiple objects at once, so store all
         // of the objects if so.
+        // Once we're done, each item in this.collisions is a 2 element array,
+        // containing 1) the orientation of the face we're colliding with and
+        // 2) the object we're colliding with.
         let soonestTime = null;
-        let collisions = [];  // Array of objects we're going to collide with
-        let times = [];
+        let collisions = [];
         for (let obj of collidables) {
-            let collTime = Math.min(...this.getVertices().
+            let colls = this.getVertices().
                 map(p => obj.intersection(p, this.v)).
-                filter(t => t !== null));
-            if (soonestTime === null || collTime <= soonestTime) {
-                if (soonestTime === collTime) {
-                    collisions.push(obj);
-                } else {
-                    collisions = [obj];
+                filter(i => i != null).
+                sort((a, b) => a[0] > b[0] ? 1 : -1);
+
+            if (colls.length > 0) {
+                let coll = [colls[0][1], obj];
+                let collTime = colls[0][0];
+                if (soonestTime === null || collTime <= soonestTime) {
+                    if (soonestTime === collTime) {
+                        collisions.push(coll);
+                    } else {
+                        collisions = [coll];
+                    }
+                    soonestTime = collTime;
                 }
-                soonestTime = collTime;
             }
         }
         this.collisionTime = t + soonestTime;
-        this.collisionFaces = collisions;
+        this.collisions = collisions;
 
         this.hasTrajectory = true;
     }
@@ -645,22 +671,27 @@ class Ball extends GLBox {
         if (t > this.collisionTime) {
             // We collided, so change our trajectory so that we "bounce" in the
             // other direction
-            
+
             // Start by updating to just BEFORE the collision.  Updating to
             // exactly the collision time sometimes puts the ball just past
             // where it should be (and hence it overlaps what it shouldn't) due
             // to floating point imprecision
             this.update(this.collisionTime - 1);
             const newV = this.v.slice();
-            for (let f of this.collisionFaces) {
-                let o = f.orientation;
-                newV[o] = -newV[o];
+            const reversed = Array(3).fill(false);
+            for (let c of this.collisions) {
+                let o = c[0];
+                if (!reversed[o]) {
+                    newV[o] = -newV[o];
+                    reversed[o] = true;
+                }
+                c[1].onCollision();
             }
             this.setTrajectory(newV, this.collisionTime, this.collidables);
             this.update(t);
             return;
         };
-   
+
         const elapsed = t - this.initialTime;
 
         this.move(

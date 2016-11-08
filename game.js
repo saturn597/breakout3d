@@ -11,13 +11,13 @@ function main() {
     // Set these three values to adjust the dimensions of the game area
     const xMax = 300;
     const yMax = 300;
-    const zMax = 4000;
+    const zMax = 5000;
 
-    const zMin = 700;
+    const zMin = 1000;
 
     const fov = Math.PI / 4;
 
-    const aspect = canvas.clientWidth / canvas.clientHeight; 
+    const aspect = canvas.clientWidth / canvas.clientHeight;
 
     gl.setPerspective(fov, aspect, zMin - 1, zMax + 1, xMax, yMax);
 
@@ -37,10 +37,10 @@ function main() {
     walls[5].visible = false;
 
     const newBox = new Ball(
-        0, 0, 
+        0, 0,
         zMin + boxDims.depth / 2,
         boxDims.width,
-        boxDims.height, 
+        boxDims.height,
         boxDims.depth
     );
 
@@ -51,20 +51,40 @@ function main() {
     newBox.colors.up = [0, 0, 100];
     newBox.colors.down = [0, 0, 100];
 
-    const bigBox = new Ball(0, 0, 2000, 500, 500, 50);
-    bigBox.colors.front = [122, 255, 255];
+    const objects = [...walls, newBox];
+    const collidables = [...walls];
 
-    const objects = [...walls, newBox, bigBox];
-    const collidables = [...walls, ...bigBox.faces];
+    for (let y = 0; y < 3; y++) {
+        for (let x = 0; x < 3; x++) {
+            const b = new Ball(-150 + 180 * x, -150 + 180 * y, 3000, 150, 150, 150);
+            b.colors.front = [122, 255, 255];
+            b.onCollision = () => {
+                collidables.splice(collidables.indexOf(b), 1);
+                objects.splice(objects.indexOf(b), 1);
+            };
+            objects.push(b);
+            collidables.push(b);
+        }
+    }
 
+    let lastT;
     requestAnimationFrame(function d(t) {
         if (!newBox.hasTrajectory) {
             newBox.setTrajectory([-0.5, 1, 5], t, collidables);
+            lastT = t;
         }
 
         gl.draw(objects);
 
-        newBox.update(t);
+        if (t - lastT > 100) {
+            // Don't advance the frame if too much time passed since the last
+            // one.
+            newBox.setTrajectory(newBox.v, t, collidables);
+            console.log('skipped');
+        } else {
+            newBox.update(t);
+        }
+        lastT = t;
 
         requestAnimationFrame(d);
     });
