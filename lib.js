@@ -98,7 +98,6 @@ class GL {
     draw(objs) {
         const gl = this.gl;
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
         for (let obj of objs) {
             if (obj.visible) {
                 gl.uniformMatrix4fv(this.objectTransformLoc, false, obj.transformation.m);
@@ -616,7 +615,65 @@ class GLBox {
     }
 }
 
-class Brick extends GLBox {
+class Paddle {
+    constructor(x, y, z, width, height, thickness, color) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.width = width;
+        this.height = height;
+        this.thickness = thickness;
+        this.color = color;
+
+        this.transformation = new PositionMatrix(4, 4, [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1,
+        ]);
+
+        this.visible = true;
+    }
+
+    contains(arr) {
+        const x = arr[0];
+        const y = arr[1];
+        return x >= this.x - this.width / 2 &&
+            y >= this.y - this.height / 2 &&
+            x <= this.x + this.width &&
+            y <= this.y + this.height;
+        /*return
+            x >= this.x &&
+            y >= this.y &&
+            x <= this.x + width &&
+            y <= this.y + height;*/
+    }
+
+    getPolys() {
+        function getRect(x, y, z, width, height) {
+            return [
+                x, y, z,
+                x + width, y, z,
+                x + width, y + height, z,
+
+                x, y, z,
+                x + width, y + height, z,
+                x, y + height, z,
+            ];
+        }
+
+        let polys = [
+            ...getRect(this.x - this.width / 2, this.y - this.height / 2, this.z, this.width, this.thickness),
+            ...getRect(this.x - this.width / 2, this.y + this.height / 2 - this.thickness, this.z, this.width, this.thickness),
+            ...getRect(this.x - this.width / 2, this.y - this.height / 2 + this.thickness, this.z, this.thickness, this.height - 2 * this.thickness),
+            ...getRect(this.x + this.width / 2 - this.thickness, this.y - this.height / 2 + this.thickness, this.z, this.thickness, this.height - 2 * this.thickness),
+        ];
+        return polys;
+    }
+
+    getColors() {
+        return [].concat(...Array(24).fill(this.color));
+    }
 }
 
 class Ball extends GLBox {

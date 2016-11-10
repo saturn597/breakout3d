@@ -67,10 +67,27 @@ function main() {
         }
     }
 
+    const paddle = new Paddle(0, 0, zMin - 1, 250, 150, 5, [0, 0, 0]);  // Should zMin - 1 work?
+    objects.push(paddle);
+    canvas.onmousemove = function(evt) {
+        const rect = canvas.getBoundingClientRect();
+        const xAdj = (xMax - xMin) / canvas.width;
+        const yAdj = -(yMax - yMin) / canvas.height;
+        paddle.x = xAdj * (evt.clientX - rect.left) + xMin;
+        paddle.y = yAdj * (evt.clientY - rect.top) - yMin;
+    };
+
+    let alive = true;
+    walls[5].onCollision = function() {
+        if (!newBox.getVertices().some(paddle.contains, paddle)) {;
+            alive = false;
+        }
+    };
+
     let lastT;
     requestAnimationFrame(function d(t) {
         if (!newBox.hasTrajectory) {
-            newBox.setTrajectory([-0.5, 1, 5], t, collidables);
+            newBox.setTrajectory([-0.25, 0.5, 2.5], t, collidables);
             lastT = t;
         }
 
@@ -86,7 +103,9 @@ function main() {
         }
         lastT = t;
 
-        requestAnimationFrame(d);
+        if (alive) {
+            requestAnimationFrame(d);
+        }
     });
 }
 
