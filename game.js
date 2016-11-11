@@ -32,10 +32,6 @@ function main() {
         makeFace(zMin, xMin, xMax, yMin, yMax, [100, 0, 0], 2),
     ];
 
-    // This is the wall closest to the viewer - it shouldn't be visible, we
-    // just want it there so the ball bounces when it gets close enough
-    walls[5].visible = false;
-
     const newBox = new Ball(
         0, 0,
         zMin + boxDims.depth / 2,
@@ -51,7 +47,7 @@ function main() {
     newBox.colors.up = [0, 0, 100];
     newBox.colors.down = [0, 0, 100];
 
-    const objects = [...walls, newBox];
+    const drawables = [...walls.slice(0, 5), newBox];  // walls[5] is the wall closest to the viewer - shouldn't be visible
     const collidables = [...walls];
 
     for (let y = 0; y < 3; y++) {
@@ -60,19 +56,20 @@ function main() {
             b.colors.front = [122, 255, 255];
             b.onCollision = () => {
                 collidables.splice(collidables.indexOf(b), 1);
-                objects.splice(objects.indexOf(b), 1);
+                drawables.splice(drawables.indexOf(b), 1);
             };
-            objects.push(b);
+            drawables.push(b);
             collidables.push(b);
         }
     }
 
     const paddle = new Paddle(0, 0, zMin - 1, 250, 150, 5, [0, 0, 0]);  // Should zMin - 1 work?
-    objects.push(paddle);
+    drawables.push(paddle);
+
+    const rect = canvas.getBoundingClientRect();
+    const xAdj = (xMax - xMin) / canvas.width;
+    const yAdj = -(yMax - yMin) / canvas.height;
     canvas.onmousemove = function(evt) {
-        const rect = canvas.getBoundingClientRect();
-        const xAdj = (xMax - xMin) / canvas.width;
-        const yAdj = -(yMax - yMin) / canvas.height;
         paddle.x = xAdj * (evt.clientX - rect.left) + xMin;
         paddle.y = yAdj * (evt.clientY - rect.top) - yMin;
     };
@@ -87,11 +84,11 @@ function main() {
     let lastT;
     requestAnimationFrame(function d(t) {
         if (!newBox.hasTrajectory) {
-            newBox.setTrajectory([-0.25, 0.5, 2.5], t, collidables);
+            newBox.setTrajectory([-0.5, 1, 5], t, collidables);
             lastT = t;
         }
 
-        gl.draw(objects);
+        gl.draw(drawables);
 
         if (t - lastT > 100) {
             // Don't advance the frame if too much time passed since the last

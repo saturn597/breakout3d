@@ -40,14 +40,13 @@ function randInts(min, max, num) {
 const vShaderSrc = `
         attribute vec4 a_position;
 
-        uniform mat4 u_objectTransform;
         uniform mat4 u_projection;
 
         attribute vec4 a_color;
         varying vec4 v_color;
 
         void main() {
-            gl_Position = u_projection * u_objectTransform * a_position;
+            gl_Position = u_projection * a_position;
             v_color = a_color;
         }
     `;
@@ -98,16 +97,11 @@ class GL {
     draw(objs) {
         const gl = this.gl;
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        for (let obj of objs) {
-            if (obj.visible) {
-                gl.uniformMatrix4fv(this.objectTransformLoc, false, obj.transformation.m);
-                let polys = obj.getPolys();
-                let colors = obj.getColors();
-                this.setVertices(new Float32Array(polys));
-                this.setColors(new Int8Array(colors));
-                gl.drawArrays(gl.TRIANGLES, 0, polys.length / 3);
-            }
-        }
+        let colors = objs.map(obj => obj.getColors()).reduce((a, b) => a.concat(b));
+        let polys = objs.map(obj => obj.getPolys()).reduce((a, b) => a.concat(b));
+        this.setVertices(new Float32Array(polys));
+        this.setColors(new Int8Array(colors));
+        gl.drawArrays(gl.TRIANGLES, 0, polys.length / 3);
     }
 
     setColors(colors) {
@@ -336,8 +330,6 @@ class Face {
             0, 0, 1, 0,
             0, 0, 0, 1,
         ]);
-
-        this.visible = true;
     }
 
     get a() {
@@ -412,9 +404,24 @@ class Face {
     getPolys() {
         let v = this.vertices.map(this.orient, this);
         return [
+            v[0][0], v[0][1], v[0][2],
+            v[1][0], v[1][1], v[1][2],
+            v[2][0], v[2][1], v[2][2],
+            
+            v[0][0], v[0][1], v[0][2],
+            v[2][0], v[2][1], v[2][2],
+            v[3][0], v[3][1], v[3][2]
+        ];
+
+        // Originally used this simpler looking approach:
+        /*return [
             ...v[0], ...v[1], ...v[2],
             ...v[0], ...v[2], ...v[3],
-        ];
+        ];*/
+        // But per Chrome's profiler that was a lot slower, and this method is
+        // called a lot.  
+        // ~12% of "self" CPU time over a quick game came to ~1% with the spread
+        // operators "expanded."
     }
 
     intersection(p, v) {
@@ -484,8 +491,6 @@ class GLBox {
             0, 0, 1, 0,
             0, 0, 0, 1
         ]);
-
-        this.visible = true;
     }
 
     up() {
@@ -631,8 +636,6 @@ class Paddle {
             0, 0, 1, 0,
             0, 0, 0, 1,
         ]);
-
-        this.visible = true;
     }
 
     contains(arr) {
