@@ -323,13 +323,6 @@ class Face {
 
         this.color = color;
         this.orientation = orientation;
-
-        this.transformation = new PositionMatrix(4, 4, [
-            1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1,
-        ]);
     }
 
     get a() {
@@ -484,13 +477,6 @@ class GLBox {
             left: [0, 0, 0],
             right: [0, 0, 0],
         };
-
-        this.transformation = new PositionMatrix(4, 4, [
-            1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1
-        ]);
     }
 
     up() {
@@ -629,13 +615,6 @@ class Paddle {
         this.height = height;
         this.thickness = thickness;
         this.color = color;
-
-        this.transformation = new PositionMatrix(4, 4, [
-            1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1,
-        ]);
     }
 
     contains(arr) {
@@ -645,11 +624,6 @@ class Paddle {
             y >= this.y - this.height / 2 &&
             x <= this.x + this.width &&
             y <= this.y + this.height;
-        /*return
-            x >= this.x &&
-            y >= this.y &&
-            x <= this.x + width &&
-            y <= this.y + height;*/
     }
 
     getPolys() {
