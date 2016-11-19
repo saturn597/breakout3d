@@ -1,3 +1,7 @@
+function randomColor() {
+    return [Math.random() * 255, Math.random() * 255, Math.random() * 255];
+}
+
 function makeFace(constant, minA, maxA, minB, maxB, color, orientation) {
     const dimA = maxA - minA;
     const dimB = maxB - minB;
@@ -229,28 +233,6 @@ class GLBox {
     getPolys() {
         let res = [].concat(...this.faces.map(f => f.getPolys()));
         return res;
-        /*let v = this.getVertices();
-
-        let arr = [
-            v[0], v[2], v[1],  // front
-            v[2], v[1], v[3],
-
-            v[4], v[6], v[5],  // back
-            v[6], v[5], v[7],
-
-            v[4], v[1], v[0],  // left
-            v[4], v[5], v[1],
-
-            v[6], v[3], v[2],  // right
-            v[6], v[7], v[3],
-
-            v[4], v[2], v[0],  // top
-            v[4], v[6], v[2],
-
-            v[5], v[3], v[1],  // bottom
-            v[5], v[7], v[3],
-        ];
-        return [].concat(...arr);*/
     }
 
     getVertices() {
@@ -360,10 +342,50 @@ class Paddle {
 }
 
 class Ball extends GLBox {
-    constructor(...args) {
-        super(...args);
+    constructor(x, y, z, diameter, colors) {
+        // x, y, z, diameter give the physical location/dimensions of our ball
+        // Colors will be an array with 9 elements. Every three elements will
+        // be the rgb value (0 -> 255) of the color for one vertex of the triangles
+        // that make up the polygon that'll represent our "ball." The last three
+        // elements are the color of the "center" of the ball, the others are on the outside.
+
+        // Superclass GLBox is helpful for hit prediction
+        // The "ball" is represented graphically by a flat polygon
+        // But we'll assume we're in a box with sides of length diameter
+        super(x, y, z, diameter, diameter, diameter);
+
+        this.diameter = diameter;
         this.v = 0;
         this.collidables = [];
+
+        // Draw the ball as a polygon with numSides
+        const numSides = 25;
+        const inc = 2 * Math.PI / numSides;
+
+        // Start with a vector representing one vertex of the polygon
+        // Then rotate it around by "inc" radians and repeat until we've
+        // come full circle
+        const init = new PositionMatrix(4, 1, [0, this.diameter / 2, 0, 1]);
+        this.polys = [];
+
+        for (let i = 0; i < numSides; i++) {
+            let a = init.m.slice(0, 3);
+            init.rotateZ(inc);
+            let b = init.m.slice(0, 3);
+            this.polys.push(a, b, [0, 0, 0, 1]);
+        }
+
+        this.colors = Array(this.polys.length * 3).fill(255);
+        this.colors = [].concat(...Array(this.polys.length / 3).fill(colors));
+    }
+
+    getPolys() {
+        // Translate to be in the correct position on screen
+        return [].concat(...this.polys.map(arr => [arr[0] + this.x, arr[1] + this.y, arr[2] + this.z]));
+    }
+
+    getColors() {
+        return this.colors;
     }
 
     setTrajectory(v, t, collidables) {

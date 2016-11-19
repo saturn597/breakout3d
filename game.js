@@ -7,15 +7,12 @@ function main() {
         messages.innerHTML = msg;
     }
 
-    const ballDims = {
-        width: 80,
-        height: 80,
-        depth: 80
-    };
+    const ballRadius = 80;
+    const ballVelocity = [-0.5, 1, 5];
 
     // Set these three values to adjust the dimensions of the game area
-    const xMax = 300;
-    const yMax = 300;
+    const xMax = canvas.width / 2;
+    const yMax = canvas.height / 2;
     const zMax = 5000;
 
     const zMin = 1000;
@@ -24,7 +21,7 @@ function main() {
 
     const aspect = canvas.clientWidth / canvas.clientHeight;
 
-    gl.setPerspective(fov, aspect, zMin - 1, zMax + 1, xMax, yMax);
+    gl.setPerspective(fov, aspect, zMin, zMax + 1, xMax, yMax);
 
     let xMin = -xMax;
     let yMin = -yMax;
@@ -42,25 +39,17 @@ function main() {
     function initialize() {
         ball = new Ball(
             0, 0,
-            zMin + ballDims.depth / 2,
-            ballDims.width,
-            ballDims.height,
-            ballDims.depth
+            zMin + ballRadius / 2,
+            80,
+            [50, 50, 90,
+            50, 50, 90,
+            210, 210, 255]
         );
-
-        ball.colors = {
-            'front': [122, 0, 0],
-            'back': [122, 0, 0],
-            'left': [255, 255, 0],
-            'right': [0, 255, 0],
-            'up': [0, 0, 100],
-            'down': [0, 0, 100]
-        };
 
         bricks = [];
         for (let y = 0; y < 3; y++) {
             for (let x = 0; x < 3; x++) {
-                const b = new Ball(-150 + 180 * x, -150 + 180 * y, 3000, 150, 150, 150);
+                const b = new GLBox(-150 + 180 * x, -150 + 180 * y, zMin + (zMax - zMin) / 2, 150, 150, 150);
                 b.colors.front = [122, 255, 255];
                 bricks.push(b);
             }
@@ -80,14 +69,14 @@ function main() {
             };
         });
 
-        paddle = new Paddle(0, 0, zMin - 1, 150, 100, 5, [0, 0, 0]);  // Should zMin - 1 work?
+        paddle = new Paddle(0, 0, zMin, 150, 100, 5, [0, 0, 0]);
 
         walls = [
-            makeFace(xMin, yMin, yMax, zMin, zMax, [0, 255, 0], 0),
-            makeFace(xMax, yMin, yMax, zMin, zMax, [0, 255, 0], 0),
-            makeFace(yMax, xMin, xMax, zMin, zMax, [0, 0, 255], 1),
-            makeFace(yMin, xMin, xMax, zMin, zMax, [0, 0, 255], 1),
-            makeFace(zMax, xMin, xMax, yMin, yMax, [255, 0, 0], 2),
+            makeFace(xMin, yMin, yMax, zMin, zMax, [50, 255, 0], 0),
+            makeFace(xMax, yMin, yMax, zMin, zMax, [50, 255, 0], 0),
+            makeFace(yMax, xMin, xMax, zMin, zMax, [0, 50, 255], 1),
+            makeFace(yMin, xMin, xMax, zMin, zMax, [0, 50, 255], 1),
+            makeFace(zMax, xMin, xMax, yMin, yMax, [255, 0, 50], 2),
         ];
 
         nearWall = makeFace(zMin, xMin, xMax, yMin, yMax, [100, 0, 0], 2);
@@ -107,6 +96,7 @@ function main() {
     }
 
     initialize();
+    gl.draw(drawables);
 
     const rect = canvas.getBoundingClientRect();
     const xAdj = (xMax - xMin) / canvas.width;
@@ -118,7 +108,6 @@ function main() {
     };
 
     alive = false;
-    gl.draw(drawables);
     canvas.onclick = function(evt) {
         if (alive === true) {
             return;
@@ -138,7 +127,7 @@ function main() {
 
         requestAnimationFrame(function d(t) {
             if (!ball.hasTrajectory) {
-                ball.setTrajectory([-0.5, 1, 5], t, collidables);
+                ball.setTrajectory(ballVelocity, t, collidables);
                 lastT = t;
             }
 
