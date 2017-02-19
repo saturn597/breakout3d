@@ -1,4 +1,13 @@
 function main() {
+    // Helper for setting some initial values
+    function randomInt(min, max) {
+        // Return random int greater than or equal to min and less than max.
+        // That is, it's in range [min, max - 1].
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min)) + min;
+    }
+
     const canvas = document.getElementById('canvas');
     const gl = new GL(canvas);
 
@@ -7,44 +16,57 @@ function main() {
         messages.innerHTML = msg;
     }
 
-    const ballRadius = 80;
-    const ballVelocity = [-0.5, 1, 5];
-
-    // Set these three values to adjust the dimensions of the game area
+    // Set xMax, yMax, zMax to adjust the dimensions of the game area
     const xMax = canvas.width / 2;
+    const xMin = -xMax;
     const yMax = canvas.height / 2;
+    const yMin = -yMax;
     const zMax = 5000;
 
+    // For playability, the viewing frustum should be some distance out
     const zMin = 1000;
 
+    // Set up our perspective
     const fov = Math.PI / 4;
-
     const aspect = canvas.clientWidth / canvas.clientHeight;
-
     gl.setPerspective(fov, aspect, zMin, zMax + 1, xMax, yMax);
 
-    let xMin = -xMax;
-    let yMin = -yMax;
-
+    // Helpful variables
     let drawables = [];
     let collidables = [];
 
     let alive;
     let ball;
     let bricks;
-    let nearWall; // an invisible wall in front of the player to detect when the ball is "out of bounds"
     let paddle;
     let walls;
 
+    // nearWall is an invisible wall in front of the player - when the ball
+    // hits this, either it bounces back (if the paddle is in the right spot),
+    // or the player is penalized for missing the ball.
+    let nearWall;
+
+    // Ball initial values
+    const ballInnerColor = [210, 210, 255];
+    const ballOuterColor = [50, 50, 90];
+    const ballRadius = 40;
+    const ballVelocity = [-0.25, 0.5, 3];
+    const maxMotion = 1.25;
+
+    const initialPosition = [
+        randomInt(xMin + ballRadius + 1, xMax - ballRadius),
+        randomInt(yMin + ballRadius + 1, yMax - ballRadius),
+        zMin + ballRadius
+    ];
+
+    // Paddle initial values.
+    const paddleColor = [0, 0, 0];
+    const paddleThickness = 5;
+    const paddleHeight = 120;
+    const paddleWidth = 175;
+
     function initialize() {
-        ball = new Ball(
-            0, 0,
-            zMin + ballRadius / 2,
-            80,
-            [50, 50, 90,
-            50, 50, 90,
-            210, 210, 255]
-        );
+        ball = new Ball(...initialPosition, ballRadius * 2, maxMotion, ballInnerColor, ballOuterColor);
 
         bricks = [];
         for (let y = 0; y < 3; y++) {
@@ -69,7 +91,7 @@ function main() {
             };
         });
 
-        paddle = new Paddle(0, 0, zMin, 150, 100, 5, [0, 0, 0]);
+        paddle = new Paddle(0, 0, zMin, paddleWidth, paddleHeight, paddleThickness, paddleColor);
 
         walls = [
             makeFace(xMin, yMin, yMax, zMin, zMax, [50, 255, 0], 0),
@@ -124,6 +146,7 @@ function main() {
         canvas.style.cursor = 'none';
 
         let lastT;
+        let oldPaddlePosition = [paddle.x, paddle.y];
 
         requestAnimationFrame(function d(t) {
             if (!ball.hasTrajectory) {
@@ -131,11 +154,25 @@ function main() {
                 lastT = t;
             }
 
-            if (t - lastT > 100) {
+            const dt = t - lastT;
+
+            if (dt > 100) {
                 // Don't advance the frame if too much time passed since the last
                 // one.
                 ball.setTrajectory(ball.v, t, collidables);
             } else {
+                // When the ball bounces off the near wall (i.e., "hits the
+                // paddle", from the player's perspective), we want the
+                // paddle's movement to impact the ball's.
+                // (Multiplying by 3 exaggerates the effect.)
+                nearWall.velocityAdjustment = [
+                    3 * (paddle.x - oldPaddlePosition[0]) / dt,
+                    3 * (paddle.y - oldPaddlePosition[1]) / dt,
+                    0
+                ];
+                oldPaddlePosition = [paddle.x, paddle.y];
+
+                // Now we're ready to update the ball's position.
                 ball.update(t);
             }
             lastT = t;

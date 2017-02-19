@@ -342,12 +342,12 @@ class Paddle {
 }
 
 class Ball extends GLBox {
-    constructor(x, y, z, diameter, colors) {
+    constructor(x, y, z, diameter, maxMotion, innerColor, outerColor) {
         // x, y, z, diameter give the physical location/dimensions of our ball
-        // Colors will be an array with 9 elements. Every three elements will
-        // be the rgb value (0 -> 255) of the color for one vertex of the triangles
-        // that make up the polygon that'll represent our "ball." The last three
-        // elements are the color of the "center" of the ball, the others are on the outside.
+        // innerColor and outerColor are 3-element arrays giving the rgb color
+        // of the ball's center and outer edge, respectively (the ball will
+        // have a gradient from the inner to the outer color so that it looks
+        // shaded).
 
         // Superclass GLBox is helpful for hit prediction
         // The "ball" is represented graphically by a flat polygon
@@ -357,6 +357,9 @@ class Ball extends GLBox {
         this.diameter = diameter;
         this.v = 0;
         this.collidables = [];
+
+        this.maxMotion = maxMotion;
+        this.capVComponentsSeparately = false;
 
         // Draw the ball as a polygon with numSides
         const numSides = 25;
@@ -375,7 +378,8 @@ class Ball extends GLBox {
             this.polys.push(a, b, [0, 0, 0, 1]);
         }
 
-        this.colors = Array(this.polys.length * 3).fill(255);
+        // Store our colors in the form webGL will expect
+        const colors = [...outerColor, ...outerColor, ...innerColor];
         this.colors = [].concat(...Array(this.polys.length / 3).fill(colors));
     }
 
@@ -389,7 +393,33 @@ class Ball extends GLBox {
     }
 
     setTrajectory(v, t, collidables) {
-        this.v = v;
+        this.v = v.slice();
+
+        // Cap the horizontal/vertical velocity to be no greater than
+        // this.maxMotion.  We can either 1) cap the overall magnitude of the
+        // velocity or 2) cap the individual components of the velocity (x and
+        // y) separately.  Currently I think (1) feels more natural - capping
+        // both components separately tends to lead to each being maxed out and
+        // so the ball travels along a weird diagonal.  Note, we're not messing
+        // with the forward/backward motion here.
+        if (this.capVComponentsSeparately) {
+            if (Math.abs(this.v[0]) > this.maxMotion) {
+                // Maintain the sign in these calculations.
+                this.v[0] = this.maxMotion * this.v[0] / Math.abs(this.v[0]);
+            }
+
+            if (Math.abs(this.v[1]) > this.maxMotion) {
+                this.v[1] = this.maxMotion * this.v[1] / Math.abs(this.v[1]);
+            }
+        } else {
+            const motion = Math.sqrt(v[0] ** 2 + v[1] ** 2);
+            if (motion > this.maxMotion) {
+                const adj = this.maxMotion / motion;
+                this.v[0] = this.v[0] * adj;
+                this.v[1] = this.v[1] * adj;
+            }
+        }
+
         this.initialTime = t;
         this.initialPosition = [this.x, this.y, this.z];
         this.collidables = collidables;
@@ -432,7 +462,9 @@ class Ball extends GLBox {
     update(t) {
         if (t > this.collisionTime) {
             // We collided, so change our trajectory so that we "bounce" in the
-            // other direction
+            // other direction, and also adjust the new trajectory to take into
+            // account any "velocity adjustment" property on the collided
+            // object.
 
             // Start by updating to just BEFORE the collision.  Updating to
             // exactly the collision time sometimes puts the ball just past
@@ -446,6 +478,9 @@ class Ball extends GLBox {
                 if (!reversed[o]) {
                     newV[o] = -newV[o];
                     reversed[o] = true;
+                }
+                if (c[1].hasOwnProperty('velocityAdjustment')) {
+                    c[1].velocityAdjustment.forEach((a, i) => newV[i] = newV[i] + a);
                 }
                 c[1].onCollision();
             }
