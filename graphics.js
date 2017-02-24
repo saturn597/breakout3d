@@ -118,17 +118,31 @@ class GL {
     }
 
     setPerspective(fov, aspect, near, far, xMax, yMax) {
-        // https://unspecified.wordpress.com/2012/06/21/calculating-the-gluperspective-matrix-and-other-opengl-matrix-maths/
-
         // Sets the perspective matrix used by this GL context, based on the
         // provided parameters.
         //
         // fov: the angle in radians of the field of view
-        // aspect: the aspect ratio of the display area (like canvas width / height)
-        // near: the "near" z value - vertices nearer than this z value are clipped
+        // aspect: the aspect ratio of the display area (like canvas width /
+        // height)
+        // near: the "near" z value - vertices nearer than this z value are
+        // clipped
         // far: the max z value - vertices farther than this z value are clipped
-        // xMax: the largest x value visible at z = near
-        // yMax: the largest y value visible at z = near
+        //
+        // If xMax and yMax are set, the perspective matrix will be scaled
+        // so that either
+        //
+        // 1) the largest x value visible at z = near is xMax or
+        // 2) the largest y value visible at z = near is yMax
+        //
+        // whichever minimizes the scale. This way the canvas shows all objects
+        // at "near" between -xMax and xMax, and between -yMax and yMax,
+        // without displaying more coordinates than necessary outside of those
+        // ranges, and without looking distorted. The entire range at "near"
+        // from -xMax to xMax, and -yMax to yMax, will just fit when projected
+        // onto the display area.
+
+        // A lot of the math for this is derived on:
+        // https://unspecified.wordpress.com/2012/06/21/calculating-the-gluperspective-matrix-and-other-opengl-matrix-maths/
 
         const f = Math.tan(Math.PI * 0.5 - 0.5 * fov);
         const rangeInv = 1.0 / (near - far);
@@ -140,14 +154,17 @@ class GL {
             0, 0, near * far * rangeInv * 2, 0,
         ]);
 
-        const oldXMax = (near * aspect) / f;
-        const oldYMax = near / f;
+        if (xMax !== undefined && yMax !== undefined) {
+            const oldXMax = (near * aspect) / f;
+            const oldYMax = near / f;
+            const scale = Math.min(oldYMax / yMax, oldXMax / xMax);
 
-        matrix.scale(
-            oldXMax / xMax,
-            oldYMax / yMax,
-            1
-        );
+            matrix.scale(
+                scale,
+                scale,
+                1
+            );
+        }
 
         this.gl.uniformMatrix4fv(this.projectionLoc, false, matrix.m);
     }
