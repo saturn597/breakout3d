@@ -74,6 +74,7 @@ class GL {
         this.objectTransformLoc= gl.getUniformLocation(program, 'u_objectTransform');
 
         this.gl = gl;
+        this.viewport = (...args) => gl.viewport(...args);
 
         this.objects = [];
     }

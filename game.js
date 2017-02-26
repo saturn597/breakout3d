@@ -16,36 +16,6 @@ function main() {
         messages.innerHTML = msg;
     }
 
-    // Set xMax, yMax, zMax to adjust the dimensions of the game area
-    const xMax = canvas.width / 2;
-    const xMin = -xMax;
-    const yMax = canvas.height / 2;
-    const yMin = -yMax;
-    const zMax = 5000;
-
-    // For playability, the viewing frustum should be some distance out
-    const zMin = 1000;
-
-    // Set up our perspective
-    const fov = Math.PI / 4;
-    const aspect = canvas.clientWidth / canvas.clientHeight;
-    gl.setPerspective(fov, aspect, zMin, zMax + 1, xMax, yMax);
-
-    // Helpful variables
-    let drawables = [];
-    let collidables = [];
-
-    let alive;
-    let ball;
-    let bricks;
-    let paddle;
-    let walls;
-
-    // nearWall is an invisible wall in front of the player - when the ball
-    // hits this, either it bounces back (if the paddle is in the right spot),
-    // or the player is penalized for missing the ball.
-    let nearWall;
-
     // Ball initial values
     const ballInnerColor = [210, 210, 255];
     const ballOuterColor = [50, 50, 90];
@@ -53,29 +23,66 @@ function main() {
     const ballVelocity = [-0.25, 0.5, 3];
     const maxMotion = 1.25;
 
-    const initialPosition = [
-        randomInt(xMin + ballRadius + 1, xMax - ballRadius),
-        randomInt(yMin + ballRadius + 1, yMax - ballRadius),
-        zMin + ballRadius
-    ];
-
     // Paddle initial values.
     const paddleColor = [0, 0, 0];
     const paddleThickness = 5;
     const paddleHeight = 120;
     const paddleWidth = 175;
 
-    function initialize() {
-        ball = new Ball(...initialPosition, ballRadius * 2, maxMotion, ballInnerColor, ballOuterColor);
+    // Helpful variables
+    let alive;
+    let ball;
+    let currentLevel = 0;
+    let paddle;
+    let paused;
 
-        bricks = [];
-        for (let y = 0; y < 3; y++) {
-            for (let x = 0; x < 3; x++) {
-                const b = new GLBox(-150 + 180 * x, -150 + 180 * y, zMin + (zMax - zMin) / 2, 150, 150, 150);
-                b.colors.front = [122, 255, 255];
-                bricks.push(b);
-            }
-        }
+    // nearWall is an invisible wall in front of the player - when the ball
+    // hits this, either it bounces back (if the paddle is in the right spot),
+    // or the player is penalized for missing the ball.
+    let nearWall;
+
+    function initialize(level) {
+        const collidables = [];
+        const drawables = [];
+
+        // Get the parameters of the level we were passed.
+        //
+        // Bricks is a listing of all the bricks in the level.
+        //
+        // Set xMax, yMax, zMax to adjust the dimensions of the game area.
+        //
+        // zMin is the "near" z-value. This should be a ways out for
+        // playability.
+        const {bricks, xMax, yMax, zMax, zMin} = level;
+        const xMin = -xMax;
+        const yMin = -yMax;
+
+        // Adjust the canvas size to match xMax and yMax
+        canvas.width = xMax * 2;
+        canvas.height = yMax * 2;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+
+        // Set up our perspective
+        const fov = Math.PI / 4;
+        const aspect = canvas.clientWidth / canvas.clientHeight;
+        gl.setPerspective(fov, aspect, zMin, zMax + 1, xMax, yMax);
+
+        const rect = canvas.getBoundingClientRect();
+        const xAdj = (xMax - xMin) / canvas.width;
+        const yAdj = -(yMax - yMin) / canvas.height;
+
+        canvas.onmousemove = function(evt) {
+            paddle.x = xAdj * (evt.clientX - rect.left) + xMin;
+            paddle.y = yAdj * (evt.clientY - rect.top) - yMin;
+        };
+
+        const initialPosition = [
+            randomInt(xMin + ballRadius + 1, xMax - ballRadius),
+            randomInt(yMin + ballRadius + 1, yMax - ballRadius),
+            zMin + ballRadius
+        ];
+
+        ball = new Ball(...initialPosition, ballRadius * 2, maxMotion, ballInnerColor, ballOuterColor);
 
         let brickCount = bricks.length;
         bricks.forEach(function(b) {
@@ -85,7 +92,12 @@ function main() {
                 brickCount--;
 
                 if (brickCount <= 0) {
-                    setMessage('You win! Click to start again.');
+                    setMessage('Click to go to the next level.');
+                    currentLevel++;
+                    if (currentLevel > levels.length - 1) {
+                        setMessage('You win! Click to restart.');
+                        currentLevel = 0;
+                    }
                     alive = false;
                 }
             };
@@ -93,7 +105,7 @@ function main() {
 
         paddle = new Paddle(0, 0, zMin, paddleWidth, paddleHeight, paddleThickness, paddleColor);
 
-        walls = [
+        const walls = [
             makeFace(xMin, yMin, yMax, zMin, zMax, [50, 255, 0], 0),
             makeFace(xMax, yMin, yMax, zMin, zMax, [50, 255, 0], 0),
             makeFace(yMax, xMin, xMax, zMin, zMax, [0, 50, 255], 1),
@@ -106,51 +118,32 @@ function main() {
         nearWall.onCollision = function() {
             if (!ball.getVertices().some(paddle.contains, paddle)) {
                 alive = false;
+                currentLevel = 0;
                 setMessage('Oops, you missed! Click to try again.');
             }
         };
 
-        drawables = [...bricks, ...walls];
-        collidables = drawables.slice();
+        drawables.push(...bricks, ...walls);
+        collidables.push(...drawables.slice());
 
         collidables.push(nearWall);
         drawables.push(paddle, ball);
+
+        return {collidables, drawables};
     }
 
-    initialize();
-    gl.draw(drawables);
-
-    const rect = canvas.getBoundingClientRect();
-    const xAdj = (xMax - xMin) / canvas.width;
-    const yAdj = -(yMax - yMin) / canvas.height;
-
-    canvas.onmousemove = function(evt) {
-        paddle.x = xAdj * (evt.clientX - rect.left) + xMin;
-        paddle.y = yAdj * (evt.clientY - rect.top) - yMin;
-    };
-
-    alive = false;
-    canvas.onclick = function(evt) {
-        if (alive === true) {
-            return;
-        }
-
+    function gameLoop(collidables, drawables) {
         setMessage('Good luck!');
-
-        initialize();
-
-        paddle.x = xAdj * (evt.clientX - rect.left) + xMin;
-        paddle.y = yAdj * (evt.clientY - rect.top) - yMin;
 
         alive = true;
         canvas.style.cursor = 'none';
 
-        let lastT;
+        let lastT = null;
         let oldPaddlePosition = [paddle.x, paddle.y];
 
         requestAnimationFrame(function d(t) {
-            if (!ball.hasTrajectory) {
-                ball.setTrajectory(ballVelocity, t, collidables);
+            if (lastT === null) {
+                ball.setTrajectory(ball.v || ballVelocity, t, collidables);
                 lastT = t;
             }
 
@@ -179,12 +172,37 @@ function main() {
 
             gl.draw(drawables);
 
+            if (paused) {
+                lastT = null;
+                return;
+            }
+
             if (alive) {
                 requestAnimationFrame(d);
             } else {
                 canvas.style.cursor = 'auto';
             }
         });
+    }
+
+    alive = true;
+    paused = true;
+
+    let {collidables, drawables} = initialize(levels[0]);
+    gl.draw(drawables);
+    canvas.onclick = function() {
+        if (alive) {
+            paused = !paused;
+            if (!paused) {
+                gameLoop(collidables, drawables);
+            }
+        } else {
+            alive = true;
+            const level = initialize(levels[currentLevel]);
+            collidables = level.collidables;
+            drawables = level.drawables;
+            gameLoop(collidables, drawables);
+        }
     };
 }
 
