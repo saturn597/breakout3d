@@ -118,7 +118,7 @@ class GL {
         gl.vertexAttribPointer(this.posLoc, 3, gl.FLOAT, false, 0, 0);
     }
 
-    setPerspective(fov, aspect, near, far, xMax, yMax) {
+    setPerspective(fov, aspect, near, far, xMin, xMax, yMin, yMax) {
         // Sets the perspective matrix used by this GL context, based on the
         // provided parameters.
         //
@@ -129,25 +129,23 @@ class GL {
         // clipped
         // far: the max z value - vertices farther than this z value are clipped
         //
-        // If xMax and yMax are set, the perspective matrix will be scaled
-        // so that either
+        // If xMin, xMax, yMin and yMax are set, the perspective matrix will be
+        // scaled and translated so that, for objects at the "near" z value,
         //
-        // 1) the largest x value visible at z = near is xMax or
-        // 2) the largest y value visible at z = near is yMax
+        // 1) everything between xMin and xMax is visible and
+        // 2) everything between yMin and yMax is visible.
         //
-        // whichever minimizes the scale. This way the canvas shows all objects
-        // at "near" between -xMax and xMax, and between -yMax and yMax,
-        // without displaying more coordinates than necessary outside of those
-        // ranges, and without looking distorted. The entire range at "near"
-        // from -xMax to xMax, and -yMax to yMax, will just fit when projected
-        // onto the display area.
-
-        // A lot of the math for this is derived on:
-        // https://unspecified.wordpress.com/2012/06/21/calculating-the-gluperspective-matrix-and-other-opengl-matrix-maths/
+        // The goal is to make sure the canvas shows all objects at z=near
+        // between -xMax and xMax, and between -yMax and yMax, without
+        // displaying more coordinates than necessary outside of those ranges,
+        // and without looking distorted. The entire range at z=near from -xMax
+        // to xMax, and -yMax to yMax, will just fit within the display area.
 
         const f = Math.tan(Math.PI * 0.5 - 0.5 * fov);
         const rangeInv = 1.0 / (near - far);
 
+        // A lot of the math for this is derived on:
+        // https://unspecified.wordpress.com/2012/06/21/calculating-the-gluperspective-matrix-and-other-opengl-matrix-maths/
         const matrix = new PositionMatrix(4, 4, [
             f / aspect, 0, 0, 0,
             0, f, 0, 0,
@@ -155,16 +153,41 @@ class GL {
             0, 0, near * far * rangeInv * 2, 0,
         ]);
 
-        if (xMax !== undefined && yMax !== undefined) {
+        if (xMin !== undefined && xMax !== undefined && yMin !== undefined && yMax !== undefined) {
             const oldXMax = (near * aspect) / f;
             const oldYMax = near / f;
-            const scale = Math.min(oldYMax / yMax, oldXMax / xMax);
 
+            // First we need to scale so that the visible range at z=near covers
+            // the full distance between -oldXMax and oldXMax.
+            //
+            // The visible range at z = near goes from -oldXMax to oldXMax. So
+            // the full visible distance is oldXMax * 2. We need to scale
+            // everything so that the region between xMin and xMax covers that
+            // full distance.
+
+            const scale = Math.min(oldXMax * 2 / (xMax - xMin), oldYMax * 2 / (yMax - yMin));
             matrix.scale(
                 scale,
                 scale,
                 1
             );
+
+            // If we only scaled, the new "xMax" would be (xMax - xMin) / 2,
+            // rather than at the specified xMax. So translate to put the xMax
+            // in the right spot. The distance from (xMax - xMin) / 2 to xMax
+            // is (xMax - xMin) / 2 - xMax, or -(xMax + xMin) / 2. Our
+            // translation is happening in OpenGL land, where the viewport only
+            // covers -1 to 1, or a distance of 2. But our world is scaled up
+            // to cover xMin to xMax, or a distance of xMax - xMin. So we need
+            // to scale down our translation - so divide the -(xMax + xMin) / 2
+            // by (xMax - xMin) / 2, to get -(xMax + xMin) / (xMax - xMin)
+
+           matrix.translate(
+                -(xMax + xMin) / (xMax - xMin),
+                -(yMax + yMin) / (yMax - yMin),
+                0
+            );
+
         }
 
         this.gl.uniformMatrix4fv(this.projectionLoc, false, matrix.m);

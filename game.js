@@ -53,27 +53,25 @@ function main() {
         //
         // zMin is the "near" z-value. This should be a ways out for
         // playability.
-        const {bricks, xMax, yMax, zMax, zMin} = level;
-        const xMin = -xMax;
-        const yMin = -yMax;
+        const {bricks, xMin, xMax, yMin, yMax, zMin, zMax} = level;
 
         // Adjust the canvas size to match xMax and yMax
-        canvas.width = xMax * 2;
-        canvas.height = yMax * 2;
+        canvas.width = xMax - xMin;
+        canvas.height = yMax - yMin;
         gl.viewport(0, 0, canvas.width, canvas.height);
 
         // Set up our perspective
         const fov = Math.PI / 4;
         const aspect = canvas.clientWidth / canvas.clientHeight;
-        gl.setPerspective(fov, aspect, zMin, zMax + 1, xMax, yMax);
+        gl.setPerspective(fov, aspect, zMin, zMax + 1, xMin, xMax, yMin, yMax);
 
         const rect = canvas.getBoundingClientRect();
         const xAdj = (xMax - xMin) / canvas.width;
-        const yAdj = -(yMax - yMin) / canvas.height;
+        const yAdj = (yMax - yMin) / canvas.height;
 
         canvas.onmousemove = function(evt) {
             paddle.x = xAdj * (evt.clientX - rect.left) + xMin;
-            paddle.y = yAdj * (evt.clientY - rect.top) - yMin;
+            paddle.y = yAdj * (rect.top - evt.clientY) + yMax;
         };
 
         const initialPosition = [
