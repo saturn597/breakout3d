@@ -1,8 +1,8 @@
 const level1 = {
     bricks: [],
-    xMin: -100,
+    xMin: -225,
     xMax: 285,
-    yMin: -100,
+    yMin: -225,
     yMax: 285,
     zMax: 5000,
     zMin: 1000,  // For playability, the viewing frustum should be a ways out
