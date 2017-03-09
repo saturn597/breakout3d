@@ -1,5 +1,3 @@
-const ballVelocity = [-0.25, 0.5, 3];  // TODO: make this configurable in the level
-
 class Play {
     constructor(gl, levelData, onComplete) {
         this.gl = gl;
@@ -69,7 +67,7 @@ class Play {
             }
 
             if (lastT === null) {
-                ball.setTrajectory(ball.v || ballVelocity, t, collidables);
+                ball.setTrajectory(ball.v || this.initialVelocity, t, collidables);
                 lastT = t;
             }
 

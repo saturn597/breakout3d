@@ -20,7 +20,6 @@ function main() {
     const ballInnerColor = [210, 210, 255];
     const ballOuterColor = [50, 50, 90];
     const ballRadius = 40;
-    const maxMotion = 1.25;
 
     // Paddle initial values.
     const paddleColor = [0, 0, 0];
@@ -42,7 +41,8 @@ function main() {
         //
         // zMin is the "near" z-value. This should be a ways out for
         // playability.
-        const {bricks, xMin, xMax, yMin, yMax, zMin, zMax} = level;
+        const {bricks, initialVelocity, maxMotion, xMin, xMax, yMin, yMax,
+            zMin, zMax} = level;
 
         // Adjust the canvas size to match xMax and yMax
         canvas.width = xMax - xMin;
@@ -86,7 +86,8 @@ function main() {
         // or the player is penalized for missing the ball.
         let nearWall = makeFace(zMin, xMin, xMax, yMin, yMax, [100, 0, 0], 2);
 
-        return {ball, bricks, nearWall, paddle, walls};
+        return {ball, bricks, initialVelocity, maxMotion, nearWall, paddle,
+            walls};
     }
 
     function playComplete(victory) {

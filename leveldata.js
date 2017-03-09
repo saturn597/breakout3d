@@ -1,5 +1,7 @@
 const level1 = {
     bricks: [],
+    initialVelocity: [-0.25, -0.5, 3],
+    maxMotion: 1.25,
     xMin: -225,
     xMax: 285,
     yMin: -225,
@@ -7,6 +9,7 @@ const level1 = {
     zMax: 5000,
     zMin: 1000,  // For playability, the viewing frustum should be a ways out
 };
+
 
 for (let y = 0; y < 3; y++) {
     for (let x = 0; x < 3; x++) {
@@ -18,6 +21,8 @@ for (let y = 0; y < 3; y++) {
 
 const level2 = {
     bricks: [],
+    initialVelocity: [0.5, 0.25, 3],
+    maxMotion: 1.5,
     xMin: -300,
     xMax: 300,
     yMin: -300,
