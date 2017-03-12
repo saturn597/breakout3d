@@ -16,6 +16,10 @@ function main() {
         messages.innerHTML = msg;
     }
 
+    // Canvas size parameters
+    const targetCanvasWidth = 600;
+    const targetCanvasHeight = 600;
+
     // Ball initial values
     const ballInnerColor = [210, 210, 255];
     const ballOuterColor = [50, 50, 90];
@@ -44,9 +48,15 @@ function main() {
         const {bricks, initialVelocity, maxMotion, xMin, xMax, yMin, yMax,
             zMin, zMax} = level;
 
-        // Adjust the canvas size to match xMax and yMax
-        canvas.width = xMax - xMin;
-        canvas.height = yMax - yMin;
+        // Adjust the canvas size - try to get as close as possible to
+        // targetCanvasWidth and targetCanvasHeight, without going over (but
+        // keep the right aspect ratio).
+        const totalWidth = xMax - xMin;
+        const totalHeight = yMax - yMin;
+        const scale = Math.min(targetCanvasWidth / totalWidth,
+                targetCanvasHeight / totalHeight);
+        canvas.width = totalWidth * scale;
+        canvas.height = totalHeight * scale;
         gl.viewport(0, 0, canvas.width, canvas.height);
 
         // Set up our perspective
@@ -103,6 +113,7 @@ function main() {
             setMessage('Oops, you missed! Click to try again.');
         }
         advance = true;
+        canvas.style.cursor = 'auto';
     }
 
     canvas.onclick = function() {

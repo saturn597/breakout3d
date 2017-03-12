@@ -1,5 +1,19 @@
+body {
+    text-align: center;
+    width: 650px;
+}
+
+#gamecontainer {
+    border: 1px solid gray;
+    height: 600px;
+    width: 600px;
+}
+
 #messages {
     font-family: 'Helvetica Neue', 'sans-serif';
     font-size: 30px;
+    margin: 0 auto;
+    text-align: center;
+
     width: 600px;
 }
