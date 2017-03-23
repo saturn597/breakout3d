@@ -24,9 +24,26 @@ function makeFace(constant, minA, maxA, minB, maxB, color, orientation) {
 }
 
 class Face {
-    // Represents a piece of a plane that has a constant x, y, or z, depending
-    // on value of this.orientation
+    // Represents a piece of a plane that has a constant x, y, or z.
+    // Whether the face will have constant x, y, or z depends on the value
+    // of orientation. If orientation is:
+    //
+    // 0: then this face lies in a plane with constant x
+    // 1: then this face lies in a plane with constant y
+    // 2: then this face lies in a plane with constant z
+    //
+    // Internally, instead of referring to our x, y, and z coordinates, we
+    // refer to "a", "b', and "constant" coordinates. We map "a", "b" and "c"
+    // in a consistent way onto "x", "y" and "z", depending on our
+    // orientation.
+    //
+    // The idea is that, by referring to "a", "b", and "constant", we can have
+    // just one set of functions/calculations that applies under all
+    // orientations.
+
     constructor(position, dimA, dimB, color, orientation) {
+        // Position gives the center point of the face. dimA and dimB give the
+        // width and height of the face.
         [this.x, this.y, this.z] = position;
         this.dimA = dimA;
         this.dimB = dimB;
@@ -73,6 +90,8 @@ class Face {
     }
 
     orient(v) {
+        // Convert a [constant, a, b] vector in our internal coordinate system
+        // to an [x, y, z] vector in the external coordinate system.
         if (this.orientation === 0) {
             return v;
         }
@@ -87,6 +106,7 @@ class Face {
     }
 
     rorient(v) {
+        // Convert an [x, y, z] vector to [constant, a, b].
         if (this.orientation === 0) {
             return v;
         }
@@ -128,12 +148,34 @@ class Face {
     }
 
     intersection(p, v) {
+        // Given a point at position "p" and moving at velocity v, return the
+        // time it's expected to collide with this face as well as the face
+        // itself, or return null if there will be no collision.
+        //
+        // (Returning the face itself, i.e., this, is for consistency with the
+        // intersection method on objects, which also returns the face hit).
+        //
+        // p and v are arrays representing 3 dimensional vectors.
+
+        // This face may be oriented in one of 3 different ways. Adjust the
+        // position and velocity vectors so we can calculate the collision time
+        // with one set of equations.
         p = this.rorient(p);
         v = this.rorient(v);
+
+        // If the point isn't moving towards us, assume it won't
+        // hit us.  We're ignoring the case where the object already
+        // overlaps us. (Note - after this.rorient, v[0] refers to
+        // this face's constant value).
         if (v[0] === 0) {
             return null;
         }
 
+        // Calculate when the point will reach this face's constant value.
+        // Then figure out what "a" and "b" values it has at that time. If
+        // it'll be within this face's "a" and "b" ranges then it will collide
+        // and we should return the time of the collision. Otherwise, return
+        // null.
         let t = (this.constant - p[0]) / v[0];
         let aIntersect = p[1] + v[1] * t;
         let bIntersect = p[2] + v[2] * t;
@@ -141,7 +183,7 @@ class Face {
             this.minA <= aIntersect && aIntersect <= this.maxA &&
             this.minB <= bIntersect && bIntersect <= this.maxB
         ) {
-            return [t, this.orientation];
+            return {'time': t, 'face': this};
         }
 
         return null;
@@ -256,12 +298,25 @@ class GLBox {
     }
 
     intersection(p, v) {
-        const res = this.faces.map(f => f.intersection(p, v)).
+        // Find given a point with location vector p moving at velocity v, when
+        // will that point hit this GLBox? Return the time and the face that's
+        // going to be hit first, or return null if there will be no
+        // intersections.
+        //
+        // To do this, check each face and find the time the point will hit
+        // that face, filter out the null results (which means it won't hit the
+        // face), then sort so we can find the lowest time (since we really
+        // only want the first collision). This is inefficient but we don't do
+        // it a lot.
+        const intersections =
+            this.faces.map(f => f.intersection(p, v)).
             filter(c => c !== null).
-            sort((a, b) => a[0] > b[0] ? 1 : -1);
-        if (res.length > 0) {
-            return res[0];
+            sort((a, b) => a.time > b.time ? 1 : -1);
+
+        if (intersections.length > 0) {
+            return intersections[0];
         }
+
         return null;
     }
 
@@ -438,11 +493,11 @@ class Ball extends GLBox {
             let colls = this.getVertices().
                 map(p => obj.intersection(p, this.v)).
                 filter(i => i != null).
-                sort((a, b) => a[0] > b[0] ? 1 : -1);
+                sort((a, b) => a.time > b.time ? 1 : -1);
 
             if (colls.length > 0) {
-                let coll = [colls[0][1], obj];
-                let collTime = colls[0][0];
+                let coll = [colls[0].face.orientation, obj];
+                let collTime = colls[0].time;
                 if (soonestTime === null || collTime <= soonestTime) {
                     if (soonestTime === collTime) {
                         collisions.push(coll);
