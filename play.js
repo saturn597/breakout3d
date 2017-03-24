@@ -15,6 +15,7 @@ class Play {
 
         this.collidables = [...bricks, nearWall, ...walls];
         this.drawables = [ball, ...bricks, paddle, ...walls];
+        this.movers = [ball];
 
         this.alive = true;
         this.paused = true;
@@ -38,6 +39,10 @@ class Play {
                 this.alive = false;
             }
         };
+
+        this.mover = new Mover(0, 0, 3000, 450, 450, 50);
+        this.drawables.push(this.mover);
+        this.movers.push(this.mover);
     }
 
     setPaused(state) {
@@ -68,6 +73,7 @@ class Play {
 
             if (lastT === null) {
                 ball.setTrajectory(ball.v || this.initialVelocity, t, collidables);
+                this.mover.setTrajectory([0, 0, -1], t);
                 lastT = t;
             }
 
@@ -90,7 +96,9 @@ class Play {
                 oldPaddlePosition = [paddle.x, paddle.y];
 
                 // Now we're ready to update the ball's position.
-                ball.update(t);
+                for (let m of this.movers) {
+                    m.update(t);
+                }
             }
             lastT = t;
 

@@ -396,6 +396,32 @@ class Paddle {
     }
 }
 
+class Mover extends GLBox {
+    constructor(...args) {
+        super(...args);
+    }
+
+    setTrajectory(v, t) {
+        // Start a trajectory going at velocity v. The trajectory starts at the current
+        // position and at the time given by t.
+        this.v = v;
+        this.initialTime = t;
+
+        this.initialPosition = [this.x, this.y, this.z];
+    }
+
+    update(t) {
+        // Based on the current trajectory (i.e., an initial time, position
+        // and velocty), update our position to what it should be at time t.
+        const elapsed = t - this.initialTime;
+        this.move(
+            this.initialPosition[0] + this.v[0] * elapsed,
+            this.initialPosition[1] + this.v[1] * elapsed,
+            this.initialPosition[2] + this.v[2] * elapsed
+        );
+    }
+}
+
 class Ball extends GLBox {
     constructor(x, y, z, diameter, maxMotion, innerColor, outerColor) {
         // x, y, z, diameter give the physical location/dimensions of our ball
@@ -510,8 +536,6 @@ class Ball extends GLBox {
         }
         this.collisionTime = t + soonestTime;
         this.collisions = collisions;
-
-        this.hasTrajectory = true;
     }
 
     update(t) {
