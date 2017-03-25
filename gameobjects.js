@@ -229,6 +229,8 @@ class GLBox {
             left: [0, 0, 0],
             right: [0, 0, 0],
         };
+
+        this.v = [0, 0, 0];
     }
 
     up() {
@@ -397,8 +399,17 @@ class Paddle {
 }
 
 class Mover extends GLBox {
+    // TODO: Consider moving these methods into GLBox - is there a reason a Mover
+    // couldn't just be a GLBox with a non-zero velocity?
+
     constructor(...args) {
         super(...args);
+        this.v = [0, 0, 0];
+    }
+
+    intersection(p, v) {
+        const adjustedV = [v[0] - this.v[0], v[1] - this.v[1], v[2] - this.v[2]];
+        return super.intersection(p, adjustedV);
     }
 
     setTrajectory(v, t) {

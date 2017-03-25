@@ -41,8 +41,10 @@ class Play {
         };
 
         this.mover = new Mover(0, 0, 3000, 450, 450, 50);
+        this.mover.colors.front = [255, 100, 100];
         this.drawables.push(this.mover);
         this.movers.push(this.mover);
+        this.collidables.push(this.mover);
     }
 
     setPaused(state) {
@@ -72,8 +74,8 @@ class Play {
             }
 
             if (lastT === null) {
-                ball.setTrajectory(ball.v || this.initialVelocity, t, collidables);
                 this.mover.setTrajectory([0, 0, -1], t);
+                ball.setTrajectory(ball.v || this.initialVelocity, t, collidables);
                 lastT = t;
             }
 
