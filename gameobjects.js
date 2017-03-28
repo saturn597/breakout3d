@@ -404,6 +404,7 @@ class Mover extends GLBox {
 
     constructor(...args) {
         super(...args);
+        this.initialPosition = [this.x, this.y, this.z];
         this.v = [0, 0, 0];
     }
 
@@ -412,28 +413,79 @@ class Mover extends GLBox {
         return super.intersection(p, adjustedV);
     }
 
-    setTrajectory(v, t) {
-        // Start a trajectory going at velocity v. The trajectory starts at the current
-        // position and at the time given by t.
-        this.v = v;
-        this.initialTime = t;
+    nextCourse() {
+    }
 
+    startCourse(collidables) {
+        // Start a new course from our current position. This means we set our
+        // initialPosition to our current position, so that the update method
+        // correctly puts us here at time 0.
+        //
+        // We should also report back on the time until our course needs to
+        // change, based on the positions of other objects we get passed, or
+        // return null if we don't anticipate a change. Subclasses will
+        // implement this more fully.
         this.initialPosition = [this.x, this.y, this.z];
+        return null;
     }
 
     update(t) {
-        // Based on the current trajectory (i.e., an initial time, position
-        // and velocty), update our position to what it should be at time t.
-        const elapsed = t - this.initialTime;
+        // Based on our initial position and current velocity, update our
+        // position to what it should be at time t.
+
         this.move(
-            this.initialPosition[0] + this.v[0] * elapsed,
-            this.initialPosition[1] + this.v[1] * elapsed,
-            this.initialPosition[2] + this.v[2] * elapsed
+            this.initialPosition[0] + this.v[0] * t,
+            this.initialPosition[1] + this.v[1] * t,
+            this.initialPosition[2] + this.v[2] * t
         );
     }
 }
 
-class Ball extends GLBox {
+class Patroller extends Mover {
+    // A box object that moves back and forth between two positions.
+
+    nextCourse() {
+        this.v[this.direction] = -this.v[this.direction];
+    }
+
+    setPath(d, s, min, max) {
+        // d: sets the axis along which we move. 0 for x axis, 1 for y, 2 for
+        // z.
+        // s: sets our speed along the axis set by d.
+        // min: sets our minimum value along the axis set by d. When we reach
+        // min, turn to a positive v.
+        // max: sets our maximum value along the axis set by d. When we reach
+        // max, turn to a negative v.
+        this.direction = d;
+        this.v = [0, 0, 0];
+        this.v[d] = s;
+        this.min = min;
+        this.max = max;
+    }
+
+    startCourse(collidables) {
+        super.startCourse(collidables);
+
+        if (!this.hasOwnProperty('direction')) {
+            return null;
+        }
+
+        let v = this.v[this.direction];
+        let initial = this.initialPosition[this.direction];
+
+        if (v < 0 && initial > this.min) {
+            return Math.abs((initial - this.min) / v);
+        }
+
+        if (v > 0 && initial < this.max) {
+            return Math.abs((this.max - initial) / v);
+        }
+
+        return null;
+    }
+}
+
+class Ball extends Mover {
     constructor(x, y, z, diameter, maxMotion, innerColor, outerColor) {
         // x, y, z, diameter give the physical location/dimensions of our ball
         // innerColor and outerColor are 3-element arrays giving the rgb color
@@ -441,9 +493,9 @@ class Ball extends GLBox {
         // have a gradient from the inner to the outer color so that it looks
         // shaded).
 
-        // Superclass GLBox is helpful for hit prediction
-        // The "ball" is represented graphically by a flat polygon
-        // But we'll assume we're in a box with sides of length diameter
+        // The "ball" is represented graphically by a flat polygon.  But for
+        // collision prediction, we assume we're in a box with sides of length
+        // diameter (we inherit our "boxy" properties from superclass GLBox).
         super(x, y, z, diameter, diameter, diameter);
 
         this.diameter = diameter;
@@ -484,8 +536,38 @@ class Ball extends GLBox {
         return this.colors;
     }
 
-    setTrajectory(v, t, collidables) {
-        this.v = v.slice();
+    nextCourse() {
+        // Update our velocity to reflect the next trajectory we're expecting
+        // to take.
+        //
+        // For the ball, the next trajectory is going to be based on whatever
+        // objects and faces we expected to collide with.
+        //
+        // We also want to cap our velocity based on this.maxMotion.
+
+        this.initialPosition = [this.x, this.y, this.z];
+        const newV = this.v.slice();
+        const reversed = Array(3).fill(false);
+        for (let c of this.collisions) {
+            // If we hit a face in a given orientation, we want to bounce away
+            // from that orientation, so reverse our direction. But if we hit
+            // multiple faces in the same orientation, don't reverse more than
+            // once.
+
+            const orientation = c.face.orientation;
+            const obj = c.object;
+
+            if (!reversed[orientation]) {
+                newV[orientation] = -newV[orientation];
+                reversed[orientation] = true;
+            }
+
+            // Some objects can add to our velocity when we hit them.
+            if (obj.hasOwnProperty('velocityAdjustment')) {
+                obj.velocityAdjustment.forEach((a, i) => newV[i] = newV[i] + a);
+            }
+            obj.onCollision();
+        }
 
         // Cap the horizontal/vertical velocity to be no greater than
         // this.maxMotion.  We can either 1) cap the overall magnitude of the
@@ -495,97 +577,70 @@ class Ball extends GLBox {
         // so the ball travels along a weird diagonal.  Note, we're not messing
         // with the forward/backward motion here.
         if (this.capVComponentsSeparately) {
-            if (Math.abs(this.v[0]) > this.maxMotion) {
+            if (Math.abs(newV[0]) > this.maxMotion) {
                 // Maintain the sign in these calculations.
-                this.v[0] = this.maxMotion * this.v[0] / Math.abs(this.v[0]);
+                newV[0] = this.maxMotion * newV[0] / Math.abs(newV[0]);
             }
 
             if (Math.abs(this.v[1]) > this.maxMotion) {
-                this.v[1] = this.maxMotion * this.v[1] / Math.abs(this.v[1]);
+                newV[1] = this.maxMotion * newV[1] / Math.abs(newV[1]);
             }
         } else {
-            const motion = Math.sqrt(v[0] ** 2 + v[1] ** 2);
+            const motion = Math.sqrt(newV[0] ** 2 + newV[1] ** 2);
             if (motion > this.maxMotion) {
                 const adj = this.maxMotion / motion;
-                this.v[0] = this.v[0] * adj;
-                this.v[1] = this.v[1] * adj;
+                newV[0] = newV[0] * adj;
+                newV[1] = newV[1] * adj;
             }
         }
 
-        this.initialTime = t;
-        this.initialPosition = [this.x, this.y, this.z];
-        this.collidables = collidables;
+        this.v = newV;
+    }
 
-        // Figure out the next object(s) we're going to collide with.  Our
-        // trajectory will have to change when we collide - set collisionTime
-        // to the time the collision will occur, so that we can deal with it
-        // then. We might collide with multiple objects at once, so store all
-        // of the objects if so.
-        // Once we're done, each item in this.collisions is a 2 element array,
-        // containing 1) the orientation of the face we're colliding with and
-        // 2) the object we're colliding with.
+    startCourse(collidables) {
+        // Report back on how long until we collide next, given:
+        //
+        // 1) Our current velocity,
+        // 2) Our current position,
+        // 3) The array of collidable objects we were passed.
+        //
+        // Also, we need to remember basic information about our trajectory so
+        // we know what to do when it needs to be updated. Remember which
+        // object(s) and face(s) we're going to collide with next.
+
+        super.startCourse(collidables);
+
         let soonestTime = null;
         let collisions = [];
+
+        // To figure out when we'll collide, find the "intersection" time for
+        // each vertex of our box with each collidable object, then get the
+        // earliest of those times.
+        //
+        // Note, this currently doesn't work for very "thin" objects, since
+        // it's possible none of our vertices will hit an object that's
+        // narrower than we are, even if we actually do collide with it.
         for (let obj of collidables) {
-            let colls = this.getVertices().
+            let vertexCollisions = this.getVertices().
                 map(p => obj.intersection(p, this.v)).
                 filter(i => i != null).
                 sort((a, b) => a.time > b.time ? 1 : -1);
 
-            if (colls.length > 0) {
-                let coll = [colls[0].face.orientation, obj];
-                let collTime = colls[0].time;
-                if (soonestTime === null || collTime <= soonestTime) {
-                    if (soonestTime === collTime) {
-                        collisions.push(coll);
+            if (vertexCollisions.length > 0) {
+                const c = vertexCollisions[0];
+                if (soonestTime === null || c.time <= soonestTime) {
+                    if (soonestTime === c.time) {
+                        collisions.push({'object': obj, 'face': c.face});
                     } else {
-                        collisions = [coll];
+                        collisions = [{'object': obj, 'face': c.face}];
                     }
-                    soonestTime = collTime;
+                    soonestTime = c.time;
                 }
             }
         }
-        this.collisionTime = t + soonestTime;
+
         this.collisions = collisions;
-    }
-
-    update(t) {
-        if (t > this.collisionTime) {
-            // We collided, so change our trajectory so that we "bounce" in the
-            // other direction, and also adjust the new trajectory to take into
-            // account any "velocity adjustment" property on the collided
-            // object.
-
-            // Start by updating to just BEFORE the collision.  Updating to
-            // exactly the collision time sometimes puts the ball just past
-            // where it should be (and hence it overlaps what it shouldn't) due
-            // to floating point imprecision
-            this.update(this.collisionTime - 1);
-            const newV = this.v.slice();
-            const reversed = Array(3).fill(false);
-            for (let c of this.collisions) {
-                let o = c[0];
-                if (!reversed[o]) {
-                    newV[o] = -newV[o];
-                    reversed[o] = true;
-                }
-                if (c[1].hasOwnProperty('velocityAdjustment')) {
-                    c[1].velocityAdjustment.forEach((a, i) => newV[i] = newV[i] + a);
-                }
-                c[1].onCollision();
-            }
-            this.setTrajectory(newV, this.collisionTime, this.collidables);
-            this.update(t);
-            return;
-        };
-
-        const elapsed = t - this.initialTime;
-
-        this.move(
-            this.initialPosition[0] + this.v[0] * elapsed,
-            this.initialPosition[1] + this.v[1] * elapsed,
-            this.initialPosition[2] + this.v[2] * elapsed
-        );
+        return soonestTime;
     }
 }
 
