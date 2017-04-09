@@ -1,35 +1,34 @@
-function main() {
-    // Helper for setting some initial values
-    function randomInt(min, max) {
-        // Return random int greater than or equal to min and less than max.
-        // That is, it's in range [min, max - 1].
-        min = Math.ceil(min);
-        max = Math.floor(max);
-        return Math.floor(Math.random() * (max - min)) + min;
-    }
+const DEFAULTS = {
+    targetCanvasWidth: 600,
+    targetCanvasHeight: 600,
 
+    ballInnerColor: [210, 210, 255],
+    ballOuterColor: [50, 50, 90],
+    ballRadius: 40,
+
+    paddleColor: [0, 0, 0],
+    paddleThickness: 5,
+    paddleHeight: 120,
+    paddleWidth: 175,
+};
+
+// Helper for setting some initial values
+function randomInt(min, max) {
+    // Return random int greater than or equal to min and less than max.
+    // That is, it's in range [min, max - 1].
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min)) + min;
+}
+
+function main() {
     const canvas = document.getElementById('canvas');
-    const gl = new GL(canvas);
+    const glManager = new GLManager(canvas);
 
     const messages = document.getElementById('messages');
     function setMessage(msg) {
         messages.innerHTML = msg;
     }
-
-    // Canvas size parameters
-    const targetCanvasWidth = 600;
-    const targetCanvasHeight = 600;
-
-    // Ball initial values
-    const ballInnerColor = [210, 210, 255];
-    const ballOuterColor = [50, 50, 90];
-    const ballRadius = 40;
-
-    // Paddle initial values.
-    const paddleColor = [0, 0, 0];
-    const paddleThickness = 5;
-    const paddleHeight = 120;
-    const paddleWidth = 175;
 
     // Helpful variables
     let advance = false;
@@ -37,67 +36,29 @@ function main() {
     let play;
 
     function initialize(level) {
-        // Get the parameters of the level we were passed.
-        //
-        // Bricks is a listing of all the bricks in the level.
-        //
-        // Set xMax, yMax, zMax to adjust the dimensions of the game area.
-        //
-        // zMin is the "near" z-value. This should be a ways out for
-        // playability.
-        const {bricks, initialVelocity, maxMotion, xMin, xMax, yMin, yMax,
-            zMin, zMax} = level;
+        // Do basic initialization work required for each level.  This will
+        // involve setting up the display canvas based on the level dimensions,
+        // adding some default objects (such as walls on the edges of the level
+        // dimensions), and setting up a mouse motion callback on the canvas
+        // for moving the paddle.
 
-        // Adjust the canvas size - try to get as close as possible to
-        // targetCanvasWidth and targetCanvasHeight, without going over (but
-        // keep the right aspect ratio).
-        const totalWidth = xMax - xMin;
-        const totalHeight = yMax - yMin;
-        const scale = Math.min(targetCanvasWidth / totalWidth,
-                targetCanvasHeight / totalHeight);
-        canvas.width = totalWidth * scale;
-        canvas.height = totalHeight * scale;
-        gl.viewport(0, 0, canvas.width, canvas.height);
+        const {xMin, xMax, yMin, yMax, zMin, zMax} = level;
 
-        // Set up our perspective
-        const fov = Math.PI / 4;
-        const aspect = canvas.clientWidth / canvas.clientHeight;
-        gl.setPerspective(fov, aspect, zMin, zMax + 1, xMin, xMax, yMin, yMax);
+        prepDisplay(glManager, DEFAULTS.targetCanvasWidth, DEFAULTS.targetCanvasHeight,
+                {xMin, xMax, yMin, yMax, zMin, zMax});
+
+        const levelObjects = refineLevel(level);
 
         const rect = canvas.getBoundingClientRect();
         const xAdj = (xMax - xMin) / canvas.width;
         const yAdj = (yMax - yMin) / canvas.height;
 
-        const initialPosition = [
-            randomInt(xMin + ballRadius + 1, xMax - ballRadius),
-            randomInt(yMin + ballRadius + 1, yMax - ballRadius),
-            zMin + ballRadius
-        ];
-
-        ball = new Ball(...initialPosition, ballRadius * 2, maxMotion, ballInnerColor, ballOuterColor);
-
-        paddle = new Paddle(0, 0, zMin, paddleWidth, paddleHeight, paddleThickness, paddleColor);
-
         canvas.onmousemove = function(evt) {
-            paddle.x = xAdj * (evt.clientX - rect.left) + xMin;
-            paddle.y = yAdj * (rect.top - evt.clientY) + yMax;
+            levelObjects.paddle.x = xAdj * (evt.clientX - rect.left) + xMin;
+            levelObjects.paddle.y = yAdj * (rect.top - evt.clientY) + yMax;
         };
 
-        const walls = [
-            makeFace(xMin, yMin, yMax, zMin, zMax, [50, 255, 0], 0),
-            makeFace(xMax, yMin, yMax, zMin, zMax, [50, 255, 0], 0),
-            makeFace(yMax, xMin, xMax, zMin, zMax, [0, 50, 255], 1),
-            makeFace(yMin, xMin, xMax, zMin, zMax, [0, 50, 255], 1),
-            makeFace(zMax, xMin, xMax, yMin, yMax, [255, 0, 50], 2),
-        ];
-
-        // nearWall is an invisible wall in front of the player - when the ball
-        // hits this, either it bounces back (if the paddle is in the right spot),
-        // or the player is penalized for missing the ball.
-        let nearWall = makeFace(zMin, xMin, xMax, yMin, yMax, [100, 0, 0], 2);
-
-        return {ball, bricks, initialVelocity, maxMotion, nearWall, paddle,
-            walls};
+        return levelObjects;
     }
 
     function playComplete(victory) {
@@ -119,7 +80,7 @@ function main() {
     canvas.onclick = function() {
         if (advance) {
             // Advance to the next level.
-            play = new Play(gl, initialize(levels[currentLevel]), onComplete = playComplete);
+            play = new Play(glManager, initialize(levels[currentLevel]), onComplete = playComplete);
             advance = false;
         }
         if (play.paused) {
@@ -134,9 +95,106 @@ function main() {
         }
     };
 
-    play = new Play(gl, initialize(levels[0]), playComplete);
+    play = new Play(glManager, initialize(levels[0]), playComplete);
     play.setPaused(true);
     play.start();
+}
+
+function refineLevel(level) {
+    // Return a set of objects that should be in the level, based on level data
+    // we were passed.
+
+    let ball, paddle, walls;
+
+    const {bricks, initialVelocity, xMin, xMax, yMin, yMax, zMin, zMax} =
+        level;
+
+    const ballRadius = DEFAULTS.ballRadius;
+    if (level.hasOwnProperty('ball')) {
+        ball = level.ball;
+    } else {
+        const initialPosition = [
+            randomInt(xMin + ballRadius + 1, xMax - ballRadius),
+            randomInt(yMin + ballRadius + 1, yMax - ballRadius),
+            zMin + ballRadius
+        ];
+
+        ball = new Ball(...initialPosition, ballRadius * 2,
+                level.maxMotion, DEFAULTS.ballInnerColor,
+                DEFAULTS.ballOuterColor);
+    }
+
+    if (level.hasOwnProperty('paddle')) {
+        paddle = level.paddle;
+    } else {
+        paddle = new Paddle(0, 0, zMin, DEFAULTS.paddleWidth,
+                DEFAULTS.paddleHeight, DEFAULTS.paddleThickness,
+                DEFAULTS.paddleColor);
+    }
+
+    if (level.hasOwnProperty('walls')) {
+        walls = level.walls;
+    } else {
+        walls = [
+            makeFace(xMin, yMin, yMax, zMin, zMax, [50, 255, 0], 0),
+            makeFace(xMax, yMin, yMax, zMin, zMax, [50, 255, 0], 0),
+            makeFace(yMax, xMin, xMax, zMin, zMax, [0, 50, 255], 1),
+            makeFace(yMin, xMin, xMax, zMin, zMax, [0, 50, 255], 1),
+            makeFace(zMax, xMin, xMax, yMin, yMax, [255, 0, 50], 2),
+        ];
+    }
+
+    // nearWall is an invisible wall in front of the player - when the ball
+    // hits this, either it bounces back (if the paddle is in the right spot),
+    // or the player is penalized for missing the ball.
+    const nearWall = makeFace(zMin, xMin, xMax, yMin, yMax, [100, 0, 0], 2);
+
+    return {ball, bricks, initialVelocity, nearWall, paddle, walls};
+}
+
+function prepDisplay(glManager, targetWidth, targetHeight, data) {
+    // Given the dimensions of a level given by data, set the glManager's
+    // canvas size and adjust the perspective so that the whole level will be
+    // visible.
+    //
+    // glManager is our glManager.
+    //
+    // targetWidth and targetHeight tell us the width and height we'd like
+    // the canvas to be (we'll try to get close).
+    //
+    // fov is our field of view, an angle representing how wide an area the
+    // player should be able to see.
+    //
+    // Data contains these attributes defining the limits of the level:
+    //
+    // xMin, xMax, yMin, yMax, zMin, zMax
+
+    const {xMin, xMax, yMin, yMax, zMin, zMax} = data;
+
+    const canvas = glManager.gl.canvas;
+
+    // Adjust the canvas size. It should be in the same aspect ratio as the
+    // level itself. So, the canvas width should be in proportion to the canvas
+    // height as the level width is to the level height. Try to get the canvas
+    // as close as possible to targetWidth and targetHeight, without exceeding
+    // those dimensions.
+    const levelWidth = xMax - xMin;
+    const levelHeight = yMax - yMin;
+    const scale = Math.min(targetWidth / levelWidth,
+            targetHeight / levelHeight);
+    canvas.width = levelWidth * scale;
+    canvas.height = levelHeight * scale;
+
+    glManager.viewport(0, 0, canvas.width, canvas.height);
+
+    // Set up our perspective
+    const aspect = canvas.clientWidth / canvas.clientHeight;
+
+    // The fov doesn't actually make much difference for us since, by passing
+    // zMin, zMax, xMin, xMax, yMin, yMax to setPerspective, we force the player's
+    // view to contain exactly those ranges.
+    const fov = 0;
+    glManager.setPerspective(fov, aspect, zMin, zMax + 1, xMin, xMax, yMin, yMax);
 }
 
 window.onload = main;

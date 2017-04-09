@@ -49,8 +49,8 @@ function createProgram(gl, vertexShader, fragmentShader) {
     gl.deleteProgram(program);
 }
 
-class GL {
-    constructor(canvasElement) {
+class GLManager {
+    constructor(canvas) {
         const gl = canvas.getContext('webgl');
 
         if (!gl) {
